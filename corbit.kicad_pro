@@ -378,6 +378,18 @@
           "label": "#",
           "name": "${ITEM_NUMBER}",
           "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Sim.Pins",
+          "name": "Sim.Pins",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Sim.Device",
+          "name": "Sim.Device",
+          "show": false
         }
       ],
       "filter_string": "",
@@ -428,7 +440,7 @@
         "uuid": "46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
       }
     ],
-    "used_designators": "SW21,#PWR2",
+    "used_designators": "Deee1",
     "variants": []
   },
   "sheets": [
