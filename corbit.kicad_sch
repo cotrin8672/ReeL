@@ -6565,7 +6565,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "corbit:rotary_encoder_EC05E_Vert"
 			(at 125.73 103.886 0)
 			(hide yes)
 			(show_name no)
