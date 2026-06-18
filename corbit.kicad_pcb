@@ -90,7 +90,7 @@
 	(footprint "Button_Switch_SMD:SW_SPDT_PCM12"
 		(layer "F.Cu")
 		(uuid "01f8e569-311e-45b2-88bc-f42edc455007")
-		(at 180.67 99.5 90)
+		(at 180.67 103.5 90)
 		(descr "Ultraminiature Surface Mount Slide Switch, right-angle, https://www.ckswitches.com/media/1424/pcm.pdf")
 		(property "Reference" "SW22"
 			(at 0 -3.2 90)
@@ -1683,7 +1683,7 @@
 		)
 		(fp_line
 			(start -0.35 0.000001)
-			(end -0.35 0.550001)
+			(end -0.35 0.550002)
 			(stroke
 				(width 0.1)
 				(type solid)
@@ -16557,7 +16557,7 @@
 	(footprint "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal"
 		(layer "F.Cu")
 		(uuid "b7560b71-07d8-44ce-8d4f-cac576b28a6c")
-		(at 177.45 89 -90)
+		(at 178.45 93 -90)
 		(descr "JST PH series connector, S2B-PH-K (http://www.jst-mfg.com/product/pdf/eng/ePH.pdf)")
 		(tags "connector JST PH horizontal")
 		(property "Reference" "J1"
@@ -18563,11 +18563,11 @@
 	(footprint "corbit:XIAO_nRF52840_plus_mki"
 		(layer "F.Cu")
 		(uuid "d5e3e79d-581e-4f88-bbb1-9d588e542554")
-		(at 172.0635 70.985)
+		(at 172.0635 74.985)
 		(property "Reference" "U1"
 			(at -0.02 0.06 0)
 			(layer "F.SilkS")
-			(uuid "534625ea-95b9-4193-8a33-9de5759e47ca")
+			(uuid "46e4417f-1947-42be-82e9-0675b8229130")
 			(effects
 				(font
 					(size 1 1)
@@ -18578,7 +18578,7 @@
 		(property "Value" "XIAO-nRF52840-Plus-SMD"
 			(at 0.39 4.14 0)
 			(layer "F.Fab")
-			(uuid "8795d872-d7a6-451a-ba65-cbd41947e321")
+			(uuid "5187780e-44a2-4c92-984d-07106c96d2f9")
 			(effects
 				(font
 					(size 1 1)
@@ -18590,7 +18590,7 @@
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "df3de73b-ea9f-4c8d-a0f4-2325d86b17dc")
+			(uuid "9df30fca-6fb2-48a7-8039-1c03818882c6")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18602,7 +18602,7 @@
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "6483a91b-c156-4959-a40b-4a56353d557e")
+			(uuid "f169e6fd-f147-421b-84d9-39b4149f1d9d")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21261,6 +21261,26 @@
 		(uuid "a43bc4bf-2bc5-4e4f-99bf-4935921a7242")
 	)
 	(gr_line
+		(start 124 62)
+		(end 88 62)
+		(stroke
+			(width 0.05)
+			(type default)
+		)
+		(layer "Edge.Cuts")
+		(uuid "2048244c-145d-4682-95df-784619ec32fe")
+	)
+	(gr_line
+		(start 151 66)
+		(end 124 62)
+		(stroke
+			(width 0.05)
+			(type default)
+		)
+		(layer "Edge.Cuts")
+		(uuid "c5dac604-7720-4984-ae93-e333b070e385")
+	)
+	(gr_line
 		(start 171.599938 148.342822)
 		(end 122.322829 137.939224)
 		(stroke
@@ -21271,29 +21291,29 @@
 		(uuid "89895458-686a-44de-a43b-26f30b38c0dc")
 	)
 	(gr_line
-		(start 179 62)
-		(end 88 62)
+		(start 179 66)
+		(end 151 66)
 		(stroke
 			(width 0.05)
 			(type default)
 		)
 		(layer "Edge.Cuts")
-		(uuid "2048244c-145d-4682-95df-784619ec32fe")
+		(uuid "6d06a371-0251-4bed-8e61-c3103ffaa770")
 	)
 	(gr_arc
-		(start 179 62)
-		(mid 181.828427 63.171573)
-		(end 183 66)
+		(start 179 66)
+		(mid 181.828427 67.171573)
+		(end 183 70)
 		(stroke
 			(width 0.05)
 			(type default)
 		)
 		(layer "Edge.Cuts")
-		(uuid "fb0918c5-9f0c-4fc5-9e19-e01ed6a11acc")
+		(uuid "189ee6da-2f75-4e2c-a5d7-65508681e5cd")
 	)
 	(gr_line
 		(start 183 127)
-		(end 183 66)
+		(end 183 70)
 		(stroke
 			(width 0.05)
 			(type default)
