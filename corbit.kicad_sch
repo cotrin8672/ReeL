@@ -5544,7 +5544,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "90b275f4-4a72-4137-bafd-c5b88325e04e")
-		(property "Reference" "Deee1"
+		(property "Reference" "D7"
 			(at 59.69 124.4599 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5630,7 +5630,7 @@
 		(instances
 			(project "corbit"
 				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
-					(reference "Deee1")
+					(reference "D7")
 					(unit 1)
 				)
 			)
