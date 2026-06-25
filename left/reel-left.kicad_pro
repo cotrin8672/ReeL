@@ -472,7 +472,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "reel.kicad_pro",
+    "filename": "reel-left.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -639,8 +639,8 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "reel.kicad_sch",
-        "name": "reel",
+        "filename": "reel-left.kicad_sch",
+        "name": "reel-left",
         "uuid": "46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
       }
     ],
@@ -650,7 +650,7 @@
   "sheets": [
     [
       "46fee64b-d8d5-4529-99df-0fd09c2b7c9b",
-      "reel"
+      "reel-left"
     ]
   ],
   "text_variables": {},
