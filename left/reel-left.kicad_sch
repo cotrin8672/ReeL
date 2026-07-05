@@ -1847,10 +1847,22 @@
 		(uuid "82eb5409-c37a-45ac-b65c-be67cb64c4f2")
 	)
 	(junction
+		(at 31.75 154.94)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "8430d77a-12f2-4ee3-a9bf-1e9e8113d19b")
+	)
+	(junction
 		(at 46.99 138.43)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "8aad8046-7a82-45d8-a5df-d95fc98f6a1d")
+	)
+	(junction
+		(at 41.91 179.07)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "962f3b3b-3145-40ee-afef-15dc23d0bb42")
 	)
 	(junction
 		(at 57.15 146.05)
@@ -1875,6 +1887,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "c3f72503-75bb-4631-b4c6-3128caa8108a")
+	)
+	(junction
+		(at 46.99 154.94)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ce4580da-fd7b-4024-bfb8-b4a2ab9fa29d")
 	)
 	(junction
 		(at 77.47 105.41)
@@ -1927,10 +1945,6 @@
 	(no_connect
 		(at 85.09 40.64)
 		(uuid "dbf8a588-559c-441b-bc4f-878d2eb66b86")
-	)
-	(no_connect
-		(at 69.85 78.74)
-		(uuid "edf6be51-44f7-4727-b876-91f67713f63a")
 	)
 	(wire
 		(pts
@@ -2094,6 +2108,16 @@
 	)
 	(wire
 		(pts
+			(xy 41.91 179.07) (xy 57.15 179.07)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4d003df1-f187-4570-9db9-a75cb6a4b86a")
+	)
+	(wire
+		(pts
 			(xy 62.23 105.41) (xy 62.23 121.92)
 		)
 		(stroke
@@ -2151,6 +2175,16 @@
 			(type default)
 		)
 		(uuid "683a3c47-98f7-4075-88a0-ae49e8af65d1")
+	)
+	(wire
+		(pts
+			(xy 46.99 154.94) (xy 46.99 171.45)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "73523da2-b9bd-4718-b274-010a2527495c")
 	)
 	(wire
 		(pts
@@ -2324,6 +2358,16 @@
 	)
 	(wire
 		(pts
+			(xy 31.75 154.94) (xy 31.75 171.45)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d007f873-e049-416f-bde2-6fa0804ba7b0")
+	)
+	(wire
+		(pts
 			(xy 139.7 138.43) (xy 142.24 138.43)
 		)
 		(stroke
@@ -2361,6 +2405,16 @@
 			(type default)
 		)
 		(uuid "d88c9051-7f4c-448c-9a41-792a87c63f31")
+	)
+	(wire
+		(pts
+			(xy 29.21 179.07) (xy 41.91 179.07)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db6c2e4b-3f35-4b70-92ba-9f35a36b4c6e")
 	)
 	(wire
 		(pts
@@ -2700,6 +2754,30 @@
 			)
 		)
 	)
+	(global_label "Row4"
+		(shape input)
+		(at 69.85 78.74 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "7a01eb91-d21e-4c5e-ad0f-97e1c45d4943")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 69.85 86.6842 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
 	(global_label "Row2"
 		(shape input)
 		(at 29.21 146.05 180)
@@ -2929,6 +3007,30 @@
 		(uuid "d115d3ef-28b9-4885-8ead-1d11586049a9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 114.7015 105.41 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "Row4"
+		(shape input)
+		(at 29.21 179.07 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ea4f921f-865a-4f37-98e5-33f87b3862db")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 21.2658 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3877,6 +3979,110 @@
 			(project "reel-left"
 				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
 					(reference "SW3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:D")
+		(at 41.91 175.26 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "367efe1a-20bf-4f92-91da-e35493f0144a")
+		(property "Reference" "D21"
+			(at 44.45 173.9899 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "D"
+			(at 44.45 176.5299 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-123"
+			(at 41.91 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 41.91 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Diode"
+			(at 41.91 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" "D"
+			(at 41.91 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" "1=K 2=A"
+			(at 41.91 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a09cd8eb-5e67-4f56-97bb-5a28adbcad9e")
+		)
+		(pin "2"
+			(uuid "3842b768-bbc9-456a-8211-e98ca0570de8")
+		)
+		(instances
+			(project "reel-left"
+				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
+					(reference "D21")
 					(unit 1)
 				)
 			)
@@ -4939,7 +5145,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "6b0ae1e3-3bf6-4e31-923c-bf3e9b83e1bd")
-		(property "Reference" "SW22"
+		(property "Reference" "SW24"
 			(at 134.62 120.65 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5004,7 +5210,7 @@
 		(instances
 			(project "reel-left"
 				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
-					(reference "SW22")
+					(reference "SW24")
 					(unit 1)
 				)
 			)
@@ -5165,6 +5371,86 @@
 			(project "reel-left"
 				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
 					(reference "SW12")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 36.83 171.45 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "87cfab40-be13-4043-80f2-e23bf5517c82")
+		(property "Reference" "SW21"
+			(at 36.83 163.83 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SW_Push"
+			(at 36.83 166.37 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "reel:SideTactSwitch_2pin"
+			(at 36.83 166.37 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 36.83 166.37 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 36.83 171.45 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "0874a707-8052-4ae5-a41b-4755f8d20917")
+		)
+		(pin "1"
+			(uuid "e55fb51d-c649-4c37-9b01-5552cf464ad2")
+		)
+		(instances
+			(project "reel-left"
+				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
+					(reference "SW21")
 					(unit 1)
 				)
 			)
@@ -6399,7 +6685,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "ac3155d9-6bf3-451d-8081-2b880036b73e")
-		(property "Reference" "SW21"
+		(property "Reference" "SW25"
 			(at 135.89 106.6799 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6466,7 +6752,7 @@
 		(instances
 			(project "reel-left"
 				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
-					(reference "SW21")
+					(reference "SW25")
 					(unit 1)
 				)
 			)
@@ -6874,6 +7160,110 @@
 	)
 	(symbol
 		(lib_id "Device:D")
+		(at 57.15 175.26 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "bcd0966d-2f74-4e16-9cb8-a34c3a21d2d5")
+		(property "Reference" "D22"
+			(at 59.69 173.9899 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "D"
+			(at 59.69 176.5299 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-123"
+			(at 57.15 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 57.15 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Diode"
+			(at 57.15 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" "D"
+			(at 57.15 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" "1=K 2=A"
+			(at 57.15 175.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "9e37d57f-153e-4ff4-8b27-baf31c25e98a")
+		)
+		(pin "2"
+			(uuid "fb8878e8-b516-4808-9e59-11721aa85dd2")
+		)
+		(instances
+			(project "reel-left"
+				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
+					(reference "D22")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:D")
 		(at 87.63 109.22 90)
 		(unit 1)
 		(body_style 1)
@@ -6971,6 +7361,86 @@
 			(project "reel-left"
 				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
 					(reference "D4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 52.07 171.45 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "c5823667-20b2-4d54-b8c3-0612341f0ff0")
+		(property "Reference" "SW22"
+			(at 52.07 163.83 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SW_Push"
+			(at 52.07 166.37 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "reel:SideTactSwitch_2pin"
+			(at 52.07 166.37 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 52.07 166.37 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 52.07 171.45 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "5e5dc21e-abc0-48b2-8355-bf9396cdfb3a")
+		)
+		(pin "1"
+			(uuid "e0d2586d-8a4a-4abd-980d-7980f3a80719")
+		)
+		(instances
+			(project "reel-left"
+				(path "/46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
+					(reference "SW22")
 					(unit 1)
 				)
 			)

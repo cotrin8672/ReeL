@@ -1,4 +1,5 @@
 .history/
 corbit-backups/
 ~corbit.kicad_sch.lck
+*.kicad_*.lck
 
