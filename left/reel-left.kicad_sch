@@ -1703,6 +1703,12 @@
 		)
 	)
 	(junction
+		(at 57.15 146.05)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "08dd2d5e-a1c4-4f72-a276-ddfb45225bfa")
+	)
+	(junction
 		(at 72.39 113.03)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -1775,16 +1781,22 @@
 		(uuid "43fc4237-e3de-47e6-8dad-136354586d9b")
 	)
 	(junction
-		(at 57.15 146.05)
+		(at 72.39 129.54)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "47028828-4ddf-46de-9b73-a8fed2de780e")
+		(uuid "476f54c9-b4e5-4b28-91ec-c643b80d2e5a")
 	)
 	(junction
 		(at 87.63 113.03)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "4f89b40c-d9c9-47a0-b6ee-004dc5bde0f7")
+	)
+	(junction
+		(at 102.87 129.54)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "59b5c7d7-3cbe-40fa-a344-e07fc5f0a504")
 	)
 	(junction
 		(at 180.34 128.27)
@@ -1877,12 +1889,6 @@
 		(uuid "c6f87327-faa0-4a35-a805-5d3e035f80b2")
 	)
 	(junction
-		(at 72.39 129.54)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "ce7dd29f-6114-448f-8636-59be7f9a3795")
-	)
-	(junction
 		(at 72.39 146.05)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -1899,12 +1905,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e26e024d-1c75-4e37-b4a8-06aabeb44d79")
-	)
-	(junction
-		(at 102.87 129.54)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "e3d8b0b5-22e4-46c4-92a5-8217ec88d163")
 	)
 	(junction
 		(at 41.91 129.54)
@@ -1948,13 +1948,13 @@
 	)
 	(wire
 		(pts
-			(xy 102.87 129.54) (xy 118.11 129.54)
+			(xy 57.15 146.05) (xy 72.39 146.05)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "02a5b2aa-dbc9-40aa-9c54-8e5051376f59")
+		(uuid "085e3152-c7cb-4b89-80af-7a51ee85d4ae")
 	)
 	(wire
 		(pts
@@ -2108,16 +2108,6 @@
 	)
 	(wire
 		(pts
-			(xy 72.39 129.54) (xy 87.63 129.54)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "434c0a14-29eb-492a-97db-a3390d6711c6")
-	)
-	(wire
-		(pts
 			(xy 29.21 162.56) (xy 41.91 162.56)
 		)
 		(stroke
@@ -2125,16 +2115,6 @@
 			(type default)
 		)
 		(uuid "46b62ae4-c48e-4aeb-86b9-03a47fc930c3")
-	)
-	(wire
-		(pts
-			(xy 57.15 146.05) (xy 72.39 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "46c67b9c-2db2-4f74-b112-e7f6253d3830")
 	)
 	(wire
 		(pts
@@ -2228,6 +2208,16 @@
 	)
 	(wire
 		(pts
+			(xy 102.87 129.54) (xy 118.11 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7c9b67cd-7590-4e54-bcd2-cfee807e1bf8")
+	)
+	(wire
+		(pts
 			(xy 180.34 138.43) (xy 180.34 128.27)
 		)
 		(stroke
@@ -2255,6 +2245,16 @@
 			(type default)
 		)
 		(uuid "9adab8a8-02a4-4b21-b74d-94c06a5d8eb3")
+	)
+	(wire
+		(pts
+			(xy 72.39 129.54) (xy 87.63 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9e2783e2-8ab8-4c8d-a394-f2f62334910c")
 	)
 	(wire
 		(pts
@@ -2492,7 +2492,7 @@
 	)
 	(global_label "RotA"
 		(shape input)
-		(at 85.09 52.07 0)
+		(at 85.09 55.88 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -2502,7 +2502,7 @@
 		)
 		(uuid "08dd7d5f-8b3c-4687-9477-3a0c3bdec0fe")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 92.3085 52.07 0)
+			(at 92.3085 55.88 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -2948,7 +2948,7 @@
 	)
 	(global_label "RotB"
 		(shape input)
-		(at 85.09 55.88 0)
+		(at 85.09 52.07 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -2958,7 +2958,7 @@
 		)
 		(uuid "ca51def6-06cd-46b9-badf-b0fb6ef222b1")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 92.4899 55.88 0)
+			(at 92.4899 52.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3262,7 +3262,7 @@
 		(dnp no)
 		(uuid "04ae5258-2bfa-4306-9a1d-dc0a41bea9c0")
 		(property "Reference" "D5"
-			(at 29.21 124.4599 90)
+			(at 105.41 107.95 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3283,7 +3283,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -3387,7 +3387,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -3569,7 +3569,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -3673,7 +3673,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 118.11 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -3775,7 +3775,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -3855,7 +3855,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -3935,7 +3935,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -4017,7 +4017,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -4121,7 +4121,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -4225,7 +4225,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -4405,7 +4405,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -4487,7 +4487,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -4591,7 +4591,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -4695,7 +4695,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -4797,7 +4797,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -4879,7 +4879,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -4983,7 +4983,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -5247,7 +5247,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -5327,7 +5327,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -5407,7 +5407,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -5487,7 +5487,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -5569,7 +5569,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -5671,7 +5671,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -5753,7 +5753,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -5937,7 +5937,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -6039,7 +6039,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -6121,7 +6121,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 118.11 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -6442,7 +6442,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -6544,7 +6544,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -6624,7 +6624,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -6789,7 +6789,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -6869,7 +6869,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 113.03 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -6949,7 +6949,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -7029,7 +7029,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 113.03 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -7109,7 +7109,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -7191,7 +7191,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -7295,7 +7295,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -7397,7 +7397,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -7479,7 +7479,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -7583,7 +7583,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -7764,7 +7764,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -7846,7 +7846,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 125.73 0)
 			(hide yes)
 			(show_name no)

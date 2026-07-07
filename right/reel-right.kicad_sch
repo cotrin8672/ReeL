@@ -935,208 +935,6 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "reel:pmw3610_breakout"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(in_pos_files yes)
-			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "J1"
-				(at -1.905 3.81 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" ""
-				(at -1.905 1.27 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "myfootprintLibrary:pmw3610_connector"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Datasheet" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(symbol "pmw3610_breakout_0_1"
-				(rectangle
-					(start -6.35 0)
-					(end 2.54 -20.32)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-			)
-			(symbol "pmw3610_breakout_1_1"
-				(pin unspecified line
-					(at 5.08 -2.54 180)
-					(length 2.54)
-					(name "SCLK"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 5.08 -5.08 180)
-					(length 2.54)
-					(name "nCS"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 5.08 -7.62 180)
-					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 5.08 -10.16 180)
-					(length 2.54)
-					(name "Vin"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 5.08 -12.7 180)
-					(length 2.54)
-					(name "nc"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "5"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 5.08 -15.24 180)
-					(length 2.54)
-					(name "SDIO"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "6"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 5.08 -17.78 180)
-					(length 2.54)
-					(name "MOTION"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "7"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
 		(symbol "reel:XIAO-nRF52840"
 			(exclude_from_sim no)
 			(in_bom yes)
@@ -1605,6 +1403,208 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "reel:pmw3610_breakout"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J1"
+				(at -1.905 3.81 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" ""
+				(at -1.905 1.27 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" "myfootprintLibrary:pmw3610_connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "pmw3610_breakout_0_1"
+				(rectangle
+					(start -6.35 0)
+					(end 2.54 -20.32)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "pmw3610_breakout_1_1"
+				(pin unspecified line
+					(at 5.08 -2.54 180)
+					(length 2.54)
+					(name "SCLK"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 5.08 -5.08 180)
+					(length 2.54)
+					(name "nCS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 5.08 -7.62 180)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 5.08 -10.16 180)
+					(length 2.54)
+					(name "Vin"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 5.08 -12.7 180)
+					(length 2.54)
+					(name "nc"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 5.08 -15.24 180)
+					(length 2.54)
+					(name "SDIO"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 5.08 -17.78 180)
+					(length 2.54)
+					(name "MOTION"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 	)
 	(junction
 		(at 87.63 113.03)
@@ -1631,18 +1631,6 @@
 		(uuid "1e30f82f-226a-4a31-a232-bac4e66ff77d")
 	)
 	(junction
-		(at 72.39 113.03)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "1ed37eab-f174-482f-aab2-5a92836c9654")
-	)
-	(junction
-		(at 57.15 146.05)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "22083fc4-1228-4910-b7af-e34f1a1251ca")
-	)
-	(junction
 		(at 62.23 121.92)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -1665,6 +1653,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "327c60cb-635c-4b3b-ab85-c2410ebc0c25")
+	)
+	(junction
+		(at 72.39 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "33dc261c-e2e0-4a84-95fe-f3aedef045d7")
 	)
 	(junction
 		(at 41.91 146.05)
@@ -1701,6 +1695,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "70d8bf47-f492-4f0f-85a8-d26cbd4856fd")
+	)
+	(junction
+		(at 57.15 146.05)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "80d38e2a-8a8a-4ec2-8842-ea1eb8335d9e")
 	)
 	(junction
 		(at 41.91 113.03)
@@ -1988,16 +1988,6 @@
 	)
 	(wire
 		(pts
-			(xy 72.39 113.03) (xy 87.63 113.03)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "55cae86b-7f83-451e-b4b3-6e8df8d2aec8")
-	)
-	(wire
-		(pts
 			(xy 41.91 129.54) (xy 57.15 129.54)
 		)
 		(stroke
@@ -2038,6 +2028,16 @@
 	)
 	(wire
 		(pts
+			(xy 72.39 113.03) (xy 87.63 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "716887ab-ee90-4d3c-9bde-cd32328a23b4")
+	)
+	(wire
+		(pts
 			(xy 125.73 134.62) (xy 128.27 132.08)
 		)
 		(stroke
@@ -2055,16 +2055,6 @@
 			(type default)
 		)
 		(uuid "751e2afb-ee8f-46fc-9cef-52301dba28fc")
-	)
-	(wire
-		(pts
-			(xy 57.15 146.05) (xy 72.39 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "85af087c-4a88-440c-b7bf-77d70c68c509")
 	)
 	(wire
 		(pts
@@ -2105,6 +2095,16 @@
 			(type default)
 		)
 		(uuid "97086281-7b32-46e6-b48e-14fa353cf9ab")
+	)
+	(wire
+		(pts
+			(xy 57.15 146.05) (xy 72.39 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9b4863dc-aa56-4e69-bf11-befda5760223")
 	)
 	(wire
 		(pts
@@ -3030,7 +3030,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -3132,7 +3132,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -3214,7 +3214,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -3316,7 +3316,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -3536,7 +3536,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -3638,7 +3638,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -3718,7 +3718,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -3959,7 +3959,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -4039,7 +4039,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -4198,7 +4198,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -4278,7 +4278,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -4360,7 +4360,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -4464,7 +4464,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -4661,7 +4661,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -4743,7 +4743,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -4847,7 +4847,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -4951,7 +4951,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -5053,7 +5053,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 82.55 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -5135,7 +5135,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -5239,7 +5239,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -5341,7 +5341,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -5421,7 +5421,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -5580,7 +5580,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 52.07 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -5660,7 +5660,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 133.35 0)
 			(hide yes)
 			(show_name no)
@@ -5822,7 +5822,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -5904,7 +5904,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -6006,7 +6006,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 97.79 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -6086,7 +6086,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -6168,7 +6168,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 87.63 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -6272,7 +6272,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -6376,7 +6376,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 109.22 0)
 			(hide yes)
 			(show_name no)
@@ -6480,7 +6480,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -6582,7 +6582,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 36.83 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -6664,7 +6664,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 41.91 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -6768,7 +6768,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 57.15 158.75 0)
 			(hide yes)
 			(show_name no)
@@ -6950,7 +6950,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 72.39 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -7054,7 +7054,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "Diode_SMD:D_SOD-123"
+		(property "Footprint" "reel:Diode_SMD"
 			(at 102.87 125.73 0)
 			(hide yes)
 			(show_name no)
@@ -7235,7 +7235,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1_1.00u-NoClickHole"
+		(property "Footprint" "reel:SW_Hotswap_Kailh_Choc_V1V2_1.00u"
 			(at 67.31 100.33 0)
 			(hide yes)
 			(show_name no)
