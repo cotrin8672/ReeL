@@ -1233,7 +1233,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "roba:XIAO-nRF52840"
+		(symbol "reel:XIAO-nRF52840"
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
@@ -6271,7 +6271,7 @@
 		)
 	)
 	(symbol
-		(lib_id "roba:XIAO-nRF52840")
+		(lib_id "reel:XIAO-nRF52840")
 		(at 27.94 25.4 0)
 		(unit 1)
 		(body_style 1)
