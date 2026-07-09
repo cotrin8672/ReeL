@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "reel") (type "KiCad") (uri "${KIPRJMOD}/../libs/reel.pretty") (options "") (descr ""))
+)
