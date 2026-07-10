@@ -5855,7 +5855,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SideTactSwitch_2pin"
+		(property "Footprint" "reel:Switch_E-Switch_TS2_Vertical_THT"
 			(at 36.83 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -7948,7 +7948,7 @@
 				)
 			)
 		)
-		(property "Footprint" "reel:SideTactSwitch_2pin"
+		(property "Footprint" "reel:Switch_E-Switch_TS2_Vertical_THT_Mirrored"
 			(at 52.07 149.86 0)
 			(hide yes)
 			(show_name no)
