@@ -1,0 +1,259 @@
+(footprint "Display_BeeKeeb_MIP_1.08in_LS011B7DH03"
+	(version 20240108)
+	(generator "pcbnew")
+	(generator_version "8.0")
+	(layer "F.Cu")
+	(descr "BeeKeeb 1.08-inch low-power MIP LCD module using Sharp LS011B7DH03; 33 x 14 mm breakout, 5-pin 2.00 mm pitch header; pin 1 GND, 2 VCC, 3 SI, 4 SCK, 5 CS")
+	(tags "BeeKeeb Sharp LS011B7DH03 memory LCD MIP display 1.08 inch 160x68 2.00mm")
+	(property "Reference" "REF**"
+		(at 0 33 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "a5ca8ad5-dc4f-4e8c-9a33-6e14aceeb421")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "Display_BeeKeeb_MIP_1.08in_LS011B7DH03"
+		(at 0 34.5 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "b75ae2fd-0f28-405d-8e69-e8d28ce95462")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "db7e616a-c325-439c-a2bb-feb987150c9a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" "https://shop.beekeeb.jp/products/lcd-display-module"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "2f89062e-c5f6-4dd3-b663-352a96dde553")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "BeeKeeb breakout module for Sharp LS011B7DH03 1.08-inch 160x68 Memory-in-Pixel LCD, 3.3 V only"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "65298a3c-47b1-4b68-9897-dcbb46b756fb")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr through_hole)
+	(fp_rect
+		(start -7 -1.5)
+		(end 7 31.5)
+		(stroke
+			(width 0.2)
+			(type solid)
+		)
+		(fill none)
+		(layer "F.SilkS")
+		(uuid "10ac7b65-a16d-4ebf-971b-727255db4ad1")
+	)
+	(fp_poly
+		(pts
+			(xy 5.2 -1.8)
+			(xy 6 -1.8)
+			(xy 5.6 -2.5)
+		)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(fill solid)
+		(layer "F.SilkS")
+		(uuid "c178cb8c-b427-48f9-843d-0ce77837c8bc")
+	)
+	(fp_rect
+		(start -7.25 -1.75)
+		(end 7.25 31.75)
+		(stroke
+			(width 0.05)
+			(type default)
+		)
+		(fill none)
+		(layer "F.CrtYd")
+		(uuid "c921520f-8739-4f28-a831-d5e4b2080ac1")
+	)
+	(fp_rect
+		(start -7 -1.5)
+		(end 7 31.5)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill none)
+		(layer "F.Fab")
+		(uuid "01daee2e-4dda-4780-ae5f-d06decc6cdf0")
+	)
+	(fp_rect
+		(start -7 -0.5)
+		(end 7 31.5)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill none)
+		(layer "F.Fab")
+		(uuid "6dc67b33-cfd8-41de-bca5-2f51303ff3e5")
+	)
+	(fp_rect
+		(start -5.372 1.23)
+		(end 5.372 26.51)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill none)
+		(layer "F.Fab")
+		(uuid "1319bd36-75fe-4f74-a345-4213c811e643")
+	)
+	(fp_text user "LCD 1.08in"
+		(at 0 28.5 0)
+		(layer "F.Fab")
+		(uuid "3b8bdf9d-a39d-4a47-b2e0-3d4e7dd3e4b1")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
+		)
+	)
+	(fp_text user "GND"
+		(at 4 1.5 90)
+		(layer "F.Fab")
+		(uuid "0475fedb-d231-4f1b-ab59-e56bd6bb0861")
+		(effects
+			(font
+				(size 0.55 0.55)
+				(thickness 0.08)
+			)
+		)
+	)
+	(fp_text user "VCC"
+		(at 2 1.5 90)
+		(layer "F.Fab")
+		(uuid "62e63f69-f861-476e-90f4-cfb66300d1f5")
+		(effects
+			(font
+				(size 0.55 0.55)
+				(thickness 0.08)
+			)
+		)
+	)
+	(fp_text user "SI"
+		(at 0 1.25 90)
+		(layer "F.Fab")
+		(uuid "9042925f-a52a-4181-aa6c-68f110f35225")
+		(effects
+			(font
+				(size 0.55 0.55)
+				(thickness 0.08)
+			)
+		)
+	)
+	(fp_text user "SCK"
+		(at -2 1.5 90)
+		(layer "F.Fab")
+		(uuid "359b6ac4-163a-4b75-a976-00d287dbd054")
+		(effects
+			(font
+				(size 0.55 0.55)
+				(thickness 0.08)
+			)
+		)
+	)
+	(fp_text user "CS"
+		(at -4 1.25 90)
+		(layer "F.Fab")
+		(uuid "6ab77134-5422-48a0-b987-3be635236c64")
+		(effects
+			(font
+				(size 0.55 0.55)
+				(thickness 0.08)
+			)
+		)
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 16 90)
+		(layer "F.Fab")
+		(uuid "3a00c900-7518-49fb-bc8f-cd21780c0cd6")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
+		)
+	)
+	(pad "1" thru_hole rect
+		(at 4 0)
+		(size 1.35 1.35)
+		(drill 0.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "d692eb75-d7a9-4b4c-a2ee-9f66e20be82d")
+	)
+	(pad "2" thru_hole oval
+		(at 2 0)
+		(size 1.35 1.35)
+		(drill 0.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "afbb79ee-0415-43bc-9092-9d4199c116b3")
+	)
+	(pad "3" thru_hole oval
+		(at 0 0)
+		(size 1.35 1.35)
+		(drill 0.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "fca528ea-09a9-49e2-937a-0ec7604cb9f8")
+	)
+	(pad "4" thru_hole oval
+		(at -2 0)
+		(size 1.35 1.35)
+		(drill 0.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "bd0a21eb-ffb2-4e08-a936-908c6195d239")
+	)
+	(pad "5" thru_hole oval
+		(at -4 0)
+		(size 1.35 1.35)
+		(drill 0.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "e651a64e-84a1-41ac-af70-04dca43a7683")
+	)
+)
