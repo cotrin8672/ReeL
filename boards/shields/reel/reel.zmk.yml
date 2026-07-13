@@ -1,0 +1,12 @@
+file_format: "1"
+id: reel
+name: ReeL
+type: shield
+url: https://github.com/cotrin8672/ReeL
+requires: [seeed_xiao]
+features:
+  - keys
+  - encoder
+siblings:
+  - reel_left
+  - reel_right

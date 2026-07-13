@@ -1,6 +1,13 @@
+# KiCad local state and automatic backups
 .history/
-corbit-backups/
 *-backups/
-~corbit.kicad_sch.lck
 *.kicad_*.lck
+fp-info-cache
+
+# ZMK build cache and generated firmware
+/.cache/zmk/
+/build/firmware/
+
+# Local validation output
+/tmp/
 

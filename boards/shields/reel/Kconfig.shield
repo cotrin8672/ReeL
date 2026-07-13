@@ -1,0 +1,5 @@
+config SHIELD_REEL_LEFT
+    def_bool $(shields_list_contains,reel_left)
+
+config SHIELD_REEL_RIGHT
+    def_bool $(shields_list_contains,reel_right)
