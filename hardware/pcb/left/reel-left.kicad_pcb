@@ -26051,9 +26051,9 @@
 			)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net "unconnected-(U1-3V3-Pad12)")
+			(net "3.3V")
 			(pinfunction "3V3_12")
-			(pintype "unspecified+no_connect")
+			(pintype "unspecified")
 			(uuid "a2a0bce1-8954-4dce-b2ed-a19642047720")
 		)
 		(pad "13" thru_hole oval
@@ -26112,9 +26112,9 @@
 			)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net "unconnected-(U1-NFC3_0.16-Pad17)")
+			(net "SI")
 			(pinfunction "NFC3_0.16_17")
-			(pintype "unspecified+no_connect")
+			(pintype "unspecified")
 			(options
 				(clearance outline)
 				(anchor rect)
@@ -26130,9 +26130,9 @@
 			)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net "unconnected-(U1-NFC4_1.00-Pad18)")
+			(net "SCK")
 			(pinfunction "NFC4_1.00_18")
-			(pintype "unspecified+no_connect")
+			(pintype "unspecified")
 			(uuid "4bb96ea8-ce0d-4414-85e7-f27092935943")
 		)
 		(pad "19" thru_hole oval
@@ -26143,9 +26143,9 @@
 			)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net "unconnected-(U1-NFC5_1.10-Pad19)")
+			(net "CS")
 			(pinfunction "NFC5_1.10_19")
-			(pintype "unspecified+no_connect")
+			(pintype "unspecified")
 			(uuid "f973f54c-22b0-440c-bc65-dbec4c51b242")
 		)
 		(pad "20" thru_hole circle
@@ -26182,6 +26182,276 @@
 				(xyz -90 0 -90)
 			)
 		)
+	)
+	(footprint "reel:Display_BeeKeeb_MIP_1.08in_LS011B7DH03"
+		(layer "F.Cu")
+		(uuid "d8ada11c-ead9-418e-a3c9-5ad6244d4b21")
+		(at 197.475 95 180)
+		(descr "BeeKeeb 1.08-inch low-power MIP LCD module using Sharp LS011B7DH03; 33 x 14 mm breakout, 5-pin 2.00 mm pitch header; pin 1 GND, 2 VCC, 3 SI, 4 SCK, 5 CS")
+		(tags "BeeKeeb Sharp LS011B7DH03 memory LCD MIP display 1.08 inch 160x68 2.00mm")
+		(property "Reference" "J2"
+			(at 0 33 180)
+			(unlocked yes)
+			(layer "F.SilkS")
+			(uuid "27f0d970-4309-4baf-a31a-675f417076ec")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Value" "Conn_01x05"
+			(at 0 34.5 180)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "3d8376ba-572f-4f68-840d-fac6af251c83")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 0 0 180)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "9d872adb-e956-4594-9d0d-0398e9194b57")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x05, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 0 0 180)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "4a274a8d-777e-4585-b133-5c5dba927837")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property ki_fp_filters "Connector*:*_1x??_*")
+		(path "/3a0c7b24-ebcc-4958-bc57-be3d3b5c4028")
+		(sheetname "/")
+		(sheetfile "reel-left.kicad_sch")
+		(units
+			(unit
+				(name "A")
+				(pins "1" "2" "3" "4" "5")
+			)
+		)
+		(attr through_hole)
+		(duplicate_pad_numbers_are_jumpers no)
+		(fp_rect
+			(start -7 -1.5)
+			(end 7 31.5)
+			(stroke
+				(width 0.2)
+				(type solid)
+			)
+			(fill no)
+			(layer "F.SilkS")
+			(uuid "541e0957-359e-4cb2-a45e-39cbd92b6b7b")
+		)
+		(fp_poly
+			(pts
+				(xy 5.2 -1.8) (xy 6 -1.8) (xy 5.6 -2.5)
+			)
+			(stroke
+				(width 0.15)
+				(type solid)
+			)
+			(fill yes)
+			(layer "F.SilkS")
+			(uuid "be7dfc6f-1446-495a-a5ef-a01e17af6158")
+		)
+		(fp_rect
+			(start -7.25 -1.75)
+			(end 7.25 31.75)
+			(stroke
+				(width 0.05)
+				(type default)
+			)
+			(fill no)
+			(layer "F.CrtYd")
+			(uuid "43d86965-9341-46be-bca0-e42d215a50a3")
+		)
+		(fp_rect
+			(start -5.372 1.23)
+			(end 5.372 26.51)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill no)
+			(layer "F.Fab")
+			(uuid "8cd8150d-4f1f-451b-acb2-c624de7f5328")
+		)
+		(fp_rect
+			(start -7 -0.5)
+			(end 7 31.5)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill no)
+			(layer "F.Fab")
+			(uuid "da33c424-8aba-4f09-a638-75e778e832d7")
+		)
+		(fp_rect
+			(start -7 -1.5)
+			(end 7 31.5)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(fill no)
+			(layer "F.Fab")
+			(uuid "6d17fa73-ff0c-4a1b-855c-a070c829b8ab")
+		)
+		(fp_text user "GND"
+			(at 4 1.5 90)
+			(layer "F.Fab")
+			(uuid "140452db-90c2-486d-96f3-6fd5bd029fbd")
+			(effects
+				(font
+					(size 0.55 0.55)
+					(thickness 0.08)
+				)
+			)
+		)
+		(fp_text user "VCC"
+			(at 2 1.5 90)
+			(layer "F.Fab")
+			(uuid "09c6088f-eee7-4239-a24c-30413fbfbe49")
+			(effects
+				(font
+					(size 0.55 0.55)
+					(thickness 0.08)
+				)
+			)
+		)
+		(fp_text user "LCD 1.08in"
+			(at 0 28.5 0)
+			(layer "F.Fab")
+			(uuid "c9c9c367-b487-4a06-a182-75edbacec945")
+			(effects
+				(font
+					(size 0.8 0.8)
+					(thickness 0.12)
+				)
+			)
+		)
+		(fp_text user "${REFERENCE}"
+			(at 0 16 90)
+			(layer "F.Fab")
+			(uuid "00b657c5-e93f-41d2-b1d0-9ac35ac3dd4d")
+			(effects
+				(font
+					(size 0.8 0.8)
+					(thickness 0.12)
+				)
+			)
+		)
+		(fp_text user "SI"
+			(at 0 1.25 90)
+			(layer "F.Fab")
+			(uuid "82d38f41-b35e-4e3c-8518-a59f84ef23e8")
+			(effects
+				(font
+					(size 0.55 0.55)
+					(thickness 0.08)
+				)
+			)
+		)
+		(fp_text user "SCK"
+			(at -2 1.5 90)
+			(layer "F.Fab")
+			(uuid "c2e02eed-28bd-4f0c-a951-c260e2a228df")
+			(effects
+				(font
+					(size 0.55 0.55)
+					(thickness 0.08)
+				)
+			)
+		)
+		(fp_text user "CS"
+			(at -4 1.25 90)
+			(layer "F.Fab")
+			(uuid "34160084-0de6-4e77-acc5-e976603d5be6")
+			(effects
+				(font
+					(size 0.55 0.55)
+					(thickness 0.08)
+				)
+			)
+		)
+		(pad "1" thru_hole rect
+			(at 4 0 180)
+			(size 1.35 1.35)
+			(drill 0.8)
+			(layers "*.Cu" "*.Mask")
+			(remove_unused_layers no)
+			(net "GND")
+			(pinfunction "Pin_1_1")
+			(pintype "passive")
+			(uuid "d4aa609a-005e-4d46-9943-57ad5ff0aec2")
+		)
+		(pad "2" thru_hole oval
+			(at 2 0 180)
+			(size 1.35 1.35)
+			(drill 0.8)
+			(layers "*.Cu" "*.Mask")
+			(remove_unused_layers no)
+			(net "3.3V")
+			(pinfunction "Pin_2_2")
+			(pintype "passive")
+			(uuid "3f1512c8-59fa-4288-b3b2-b4fbab225b9d")
+		)
+		(pad "3" thru_hole oval
+			(at 0 0 180)
+			(size 1.35 1.35)
+			(drill 0.8)
+			(layers "*.Cu" "*.Mask")
+			(remove_unused_layers no)
+			(net "SI")
+			(pinfunction "Pin_3_3")
+			(pintype "passive")
+			(uuid "2b468895-5d6f-4964-8a0d-8412e7d81f07")
+		)
+		(pad "4" thru_hole oval
+			(at -2 0 180)
+			(size 1.35 1.35)
+			(drill 0.8)
+			(layers "*.Cu" "*.Mask")
+			(remove_unused_layers no)
+			(net "SCK")
+			(pinfunction "Pin_4_4")
+			(pintype "passive")
+			(uuid "882414da-a623-4cf0-961d-22af5201fc02")
+		)
+		(pad "5" thru_hole oval
+			(at -4 0 180)
+			(size 1.35 1.35)
+			(drill 0.8)
+			(layers "*.Cu" "*.Mask")
+			(remove_unused_layers no)
+			(net "CS")
+			(pinfunction "Pin_5_5")
+			(pintype "passive")
+			(uuid "6642962d-ecb9-423e-aba0-cc4750c42d00")
+		)
+		(embedded_fonts no)
 	)
 	(footprint "reel:RotaryEncoder_BM10_3Pin"
 		(layer "F.Cu")
@@ -26243,6 +26513,12 @@
 		(path "/ac3155d9-6bf3-451d-8081-2b880036b73e")
 		(sheetname "/")
 		(sheetfile "reel-left.kicad_sch")
+		(units
+			(unit
+				(name "A")
+				(pins "A" "C" "B")
+			)
+		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
