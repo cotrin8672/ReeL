@@ -487,7 +487,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "reel-left.kicad_pro",
+    "filename": "reel-left-top.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -654,8 +654,8 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "reel-left.kicad_sch",
-        "name": "reel-left",
+        "filename": "reel-left-top.kicad_sch",
+        "name": "reel-left-top",
         "uuid": "46fee64b-d8d5-4529-99df-0fd09c2b7c9b"
       }
     ],

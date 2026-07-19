@@ -3,8 +3,8 @@
 	(generator "pcbnew")
 	(generator_version "8.0")
 	(layer "F.Cu")
-	(descr "BeeKeeb 1.08-inch low-power MIP LCD module using Sharp LS011B7DH03; 33 x 14 mm breakout, 5-pin 2.00 mm pitch header; pin 1 GND, 2 VCC, 3 SI, 4 SCK, 5 CS")
-	(tags "BeeKeeb Sharp LS011B7DH03 memory LCD MIP display 1.08 inch 160x68 2.00mm")
+	(descr "BeeKeeb 1.08-inch low-power MIP LCD module using Sharp LS011B7DH03; 33 x 14 mm breakout, 5-pin 2.54 mm pitch header; pin 1 GND, 2 VCC, 3 SI, 4 SCK, 5 CS")
+	(tags "BeeKeeb Sharp LS011B7DH03 memory LCD MIP display 1.08 inch 160x68 2.54mm")
 	(property "Reference" "REF**"
 		(at 0 33 0)
 		(unlocked yes)
@@ -151,7 +151,7 @@
 		)
 	)
 	(fp_text user "GND"
-		(at 4 1.5 90)
+		(at 5.08 1.5 90)
 		(layer "F.Fab")
 		(uuid "0475fedb-d231-4f1b-ab59-e56bd6bb0861")
 		(effects
@@ -162,7 +162,7 @@
 		)
 	)
 	(fp_text user "VCC"
-		(at 2 1.5 90)
+		(at 2.54 1.5 90)
 		(layer "F.Fab")
 		(uuid "62e63f69-f861-476e-90f4-cfb66300d1f5")
 		(effects
@@ -184,7 +184,7 @@
 		)
 	)
 	(fp_text user "SCK"
-		(at -2 1.5 90)
+		(at -2.54 1.5 90)
 		(layer "F.Fab")
 		(uuid "359b6ac4-163a-4b75-a976-00d287dbd054")
 		(effects
@@ -195,7 +195,7 @@
 		)
 	)
 	(fp_text user "CS"
-		(at -4 1.25 90)
+		(at -5.08 1.25 90)
 		(layer "F.Fab")
 		(uuid "6ab77134-5422-48a0-b987-3be635236c64")
 		(effects
@@ -217,7 +217,7 @@
 		)
 	)
 	(pad "1" thru_hole rect
-		(at 4 0)
+		(at 5.08 0)
 		(size 1.35 1.35)
 		(drill 0.8)
 		(layers "*.Cu" "*.Mask")
@@ -225,7 +225,7 @@
 		(uuid "d692eb75-d7a9-4b4c-a2ee-9f66e20be82d")
 	)
 	(pad "2" thru_hole oval
-		(at 2 0)
+		(at 2.54 0)
 		(size 1.35 1.35)
 		(drill 0.8)
 		(layers "*.Cu" "*.Mask")
@@ -241,7 +241,7 @@
 		(uuid "fca528ea-09a9-49e2-937a-0ec7604cb9f8")
 	)
 	(pad "4" thru_hole oval
-		(at -2 0)
+		(at -2.54 0)
 		(size 1.35 1.35)
 		(drill 0.8)
 		(layers "*.Cu" "*.Mask")
@@ -249,7 +249,7 @@
 		(uuid "bd0a21eb-ffb2-4e08-a936-908c6195d239")
 	)
 	(pad "5" thru_hole oval
-		(at -4 0)
+		(at -5.08 0)
 		(size 1.35 1.35)
 		(drill 0.8)
 		(layers "*.Cu" "*.Mask")
