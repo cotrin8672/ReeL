@@ -7,6 +7,7 @@ requires: [seeed_xiao]
 features:
   - keys
   - encoder
+  - display
 siblings:
   - reel_left
   - reel_right

@@ -2,7 +2,8 @@
 
 ReeL uses two Seeed XIAO nRF52840 controllers. The right half is the ZMK
 central and contains the PMW3610 trackball. The left half is the BLE
-peripheral and contains the rotary encoder.
+peripheral and contains the rotary encoder. Each half has an LS011B7DH03
+160x68 memory LCD.
 
 ## Build outputs
 
@@ -20,17 +21,18 @@ The ZMK source and reusable workflow are pinned to commit
 
 ## Verified build
 
-Both shield targets were built successfully with the
-`zmkfirmware/zmk-build-arm:4.1` container and Zephyr 4.1.0. Local verification
-produced the following ignored artifacts:
+Both shield targets were built successfully against the pinned ZMK source with
+Zephyr 4.1.0 and Zephyr SDK 0.17.0. Local verification produced the following
+ignored artifacts:
 
 - `build/firmware/reel_left.uf2`
 - `build/firmware/reel_right.uf2`
 
-The generated right-half configuration enables
-`CONFIG_ZMK_SPLIT_ROLE_CENTRAL`, `CONFIG_ZMK_POINTING`,
-`CONFIG_INPUT_PMW3610`, and `CONFIG_SPI`. The generated left-half
-configuration enables `CONFIG_EC11`.
+Both generated configurations enable `CONFIG_ZMK_DISPLAY`, `CONFIG_LS0XX`,
+one-bit LVGL color, and the built-in ZMK status screen. The generated
+right-half configuration also enables `CONFIG_ZMK_SPLIT_ROLE_CENTRAL`,
+`CONFIG_ZMK_POINTING`, `CONFIG_INPUT_PMW3610`, and `CONFIG_SPI`. The generated
+left-half configuration also enables `CONFIG_EC11`.
 
 ## First flash
 
@@ -47,11 +49,17 @@ flashing ReeL again.
 ## Bring-up assumptions
 
 - The matrix diode direction is `col2row`.
+- The first three matrix rows are transformed into physical left-to-right
+  order on both halves. The key bindings remain provisional until the final
+  keymap is specified.
 - The two tact switches on the encoder shaft extension are left row 3,
-  columns 0 and 1. They initially send left and right mouse clicks.
+  columns 0 and 1. Their current left/right click bindings are placeholders.
 - The encoder is initially configured for 20 steps and 20 triggers per
   rotation. Adjust both values after checking the actual encoder behavior.
 - The PMW3610 starts at 1200 CPI with no axis swap or inversion. Tune the
   devicetree properties after checking the installed sensor orientation.
 - PMW3610 SDIO uses XIAO D10 as a half-duplex SPI data line. D8 is SCLK, D7
   is chip select, and D9 is MOTION.
+- Each LS011B7DH03 uses P0.16 for SI, P1.00 for SCK, and P1.10 for the
+  active-high chip select. The display uses SPIM3 and serial VCOM inversion;
+  the right-side trackball remains on SPIM2.
