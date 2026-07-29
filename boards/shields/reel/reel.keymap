@@ -3,22 +3,75 @@
 #include <dt-bindings/zmk/mouse.h>
 
 / {
+    behaviors {
+        scroll_encoder: scroll_encoder {
+            compatible = "zmk,behavior-sensor-rotate";
+            #sensor-binding-cells = <0>;
+            bindings = <&msc SCRL_UP>, <&msc SCRL_DOWN>;
+        };
+    };
+
+    macros {
+        screenshot: screenshot {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <0>;
+            tap-ms = <40>;
+            bindings = <&kp LG(LS(S))>;
+        };
+    };
+
     keymap {
         compatible = "zmk,keymap";
 
-        default_layer {
+        main_layer {
             /*
-             * Initial hardware bring-up map. The first two keys on the
-             * bottom-left row are the encoder-axis tact switches.
+             * The first two bindings on the bottom row are the upper/lower
+             * switches on the left shaft extension. The first two bindings
+             * on the right side of that row are the matching right-side
+             * upper/lower outer switches.
              */
             bindings = <
-                &kp Q     &kp W     &kp E     &kp R     &kp T              &kp Y      &kp U     &kp I     &kp O     &kp P
-                &kp A     &kp S     &kp D     &kp F     &kp G     &kp H   &kp J      &kp K     &kp L     &kp SEMI  &kp SQT
-                &kp Z     &kp X     &kp C     &kp V     &kp B     &kp N   &kp M      &kp COMMA &kp DOT   &kp FSLH  &kp ESC
-                &mkp LCLK &mkp RCLK &kp LCTRL &kp LALT  &kp SPACE           &kp ENTER  &kp RALT  &kp BSPC  &kp DEL
+                &kp Q           &kp W           &kp E       &kp R       &kp T              &kp Y      &kp U     &kp I     &kp O     &kp P
+                &kp A           &kp S           &kp D       &kp F       &kp G       &kp H   &kp J      &kp K     &kp L     &kp SEMI  &mt LC(LSHFT) SEMI
+                &kp Z           &kp X           &kp C       &kp V       &kp B       &kp N   &kp M      &kp COMMA &kp DOT   &kp FSLH  &kp ESC
+                &mkp MB4        &mkp MB5        &mt LSHFT LANG2 &lt 1 SPACE &mt LALT LANG1   &kp MINUS  &kp TAB   &mt RCTRL BSPC &lt 2 ENTER
             >;
 
-            sensor-bindings = <&inc_dec_kp C_VOL_UP C_VOL_DN>;
+            sensor-bindings = <&scroll_encoder>;
+        };
+
+        sub1_layer {
+            bindings = <
+                &kp N1    &kp N2    &kp N3    &kp N4    &kp N5         &kp N6    &kp N7    &kp N8    &kp N9    &kp N0
+                &kp DQT   &kp LBKT  &kp LBRC  &kp LPAR  &kp LT   &kp GT    &kp RPAR  &kp RBRC  &kp RBKT  &kp SQT   &trans
+                &kp PLUS  &kp MINUS &kp STAR  &kp FSLH  &kp PRCNT &kp COLON &kp EQUAL &trans   &trans    &kp CARET &trans
+                &trans   &trans   &trans   &trans   &trans            &trans   &trans   &trans   &trans
+            >;
+
+            sensor-bindings = <&scroll_encoder>;
+        };
+
+        sub2_layer {
+            bindings = <
+                &kp F1       &kp F2    &kp F3    &kp F4    &kp F5       &kp F6    &kp F7    &kp F8    &kp F9    &kp F10
+                &kp CARET    &kp EXCL  &kp AMPS  &kp PIPE  &none        &kp LEFT  &kp DOWN  &kp UP    &kp RIGHT &kp DLLR  &trans
+                &screenshot  &kp TILDE &kp GRAVE &kp HASH  &trans       &trans    &kp EQUAL &kp AT    &trans    &kp BSLH  &trans
+                &trans   &trans   &trans   &trans   &trans            &trans   &trans   &trans   &trans
+            >;
+
+            sensor-bindings = <&scroll_encoder>;
+        };
+
+        mouse_layer {
+            bindings = <
+                &trans   &trans   &trans   &trans   &trans        &trans   &trans   &trans   &trans   &trans
+                &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans
+                &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans   &trans
+                &trans   &trans   &trans   &trans   &trans            &trans   &trans   &trans   &trans
+            >;
+
+            sensor-bindings = <&scroll_encoder>;
         };
     };
 };
