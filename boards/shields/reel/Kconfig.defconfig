@@ -12,13 +12,6 @@ config ZMK_POINTING
 config SPI
     default y
 
-endif
-
-if SHIELD_REEL_LEFT || SHIELD_REEL_RIGHT
-
-config ZMK_SPLIT
-    default y
-
 config LS0XX_VCOM_THREAD_PRIO
     default 11
 
@@ -42,5 +35,12 @@ endchoice
 choice ZMK_DISPLAY_STATUS_SCREEN
     default ZMK_DISPLAY_STATUS_SCREEN_BUILT_IN
 endchoice
+
+endif
+
+if SHIELD_REEL_LEFT || SHIELD_REEL_RIGHT
+
+config ZMK_SPLIT
+    default y
 
 endif

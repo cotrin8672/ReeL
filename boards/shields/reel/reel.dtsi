@@ -1,12 +1,10 @@
 #include <dt-bindings/zmk/matrix_transform.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
-#include <zephyr/dt-bindings/pinctrl/nrf-pinctrl.h>
 
 / {
     chosen {
         zmk,kscan = &kscan0;
         zmk,physical-layout = &reel_layout;
-        zephyr,display = &beekeeb_lcd;
     };
 
     kscan0: kscan {
@@ -63,47 +61,6 @@
         compatible = "zmk,keymap-sensors";
         sensors = <&left_encoder>;
         triggers-per-rotation = <20>;
-    };
-};
-
-&pinctrl {
-    reel_lcd_spi3_default: reel_lcd_spi3_default {
-        group1 {
-            psels = <NRF_PSEL(SPIM_SCK, 1, 0)>,
-                    <NRF_PSEL(SPIM_MOSI, 0, 16)>;
-        };
-    };
-
-    reel_lcd_spi3_sleep: reel_lcd_spi3_sleep {
-        group1 {
-            psels = <NRF_PSEL(SPIM_SCK, 1, 0)>,
-                    <NRF_PSEL(SPIM_MOSI, 0, 16)>;
-            low-power-enable;
-        };
-    };
-};
-
-/*
- * LS011B7DH03 display header on both halves:
- * SI=P0.16, SCK=P1.00, CS=P1.10. The panel uses serial VCOM inversion,
- * so only these three GPIO signals are required.
- */
-&spi3 {
-    compatible = "nordic,nrf-spim";
-    status = "okay";
-    pinctrl-0 = <&reel_lcd_spi3_default>;
-    pinctrl-1 = <&reel_lcd_spi3_sleep>;
-    pinctrl-names = "default", "sleep";
-    cs-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
-
-    beekeeb_lcd: ls0xx@0 {
-        compatible = "sharp,ls0xx";
-        reg = <0>;
-        spi-max-frequency = <1000000>;
-        width = <160>;
-        height = <68>;
-        serial-vcom-inversion;
-        serial-vcom-interval = <33>;
     };
 };
 
