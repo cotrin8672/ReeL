@@ -46,13 +46,13 @@ static void reel_trackball_input_handler(struct input_event *event, void *user_d
      * vertical direction is inverted. Correct that basis with:
      *
      *     output_x = raw_y
-     *     output_y = raw_y - raw_x
+     *     output_y = raw_x - raw_y
      *
      * Horizontal response remains at the previously selected 80%.
      */
     int32_t scaled_x_numerator = raw_y * 4 + horizontal_remainder;
     int32_t output_x = scaled_x_numerator / 5;
-    int32_t output_y = raw_y - raw_x;
+    int32_t output_y = raw_x - raw_y;
 
     horizontal_remainder = scaled_x_numerator - output_x * 5;
 
