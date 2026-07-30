@@ -9,6 +9,10 @@ config ZMK_SPLIT_ROLE_CENTRAL
 config ZMK_POINTING
     default y
 
+endif
+
+if SHIELD_REEL_LEFT || SHIELD_REEL_RIGHT
+
 config SPI
     default y
 
