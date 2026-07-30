@@ -3,16 +3,17 @@ use core::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 use embassy_time::Timer;
 use rmk::core_traits::Runnable;
 use rmk::host::KeyboardContext;
+use rmk_types::constants::MACRO_SPACE_SIZE;
 
 pub const CALIBRATION_BLOB_SIZE: usize = 28;
-pub const CALIBRATION_MACRO_OFFSET: usize = rmk::MACRO_SPACE_SIZE - CALIBRATION_BLOB_SIZE;
+pub const CALIBRATION_MACRO_OFFSET: usize = MACRO_SPACE_SIZE - CALIBRATION_BLOB_SIZE;
 
 const MAGIC: [u8; 4] = *b"RLC1";
 const FORMAT_VERSION: u8 = 1;
 const MAX_ABS_COEFFICIENT: i32 = 16_000;
 const MIN_ABS_DETERMINANT: i64 = 10_000;
 
-const _: () = assert!(rmk::MACRO_SPACE_SIZE >= CALIBRATION_BLOB_SIZE);
+const _: () = assert!(MACRO_SPACE_SIZE >= CALIBRATION_BLOB_SIZE);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MatrixCoefficients {
