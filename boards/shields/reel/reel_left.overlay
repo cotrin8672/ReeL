@@ -16,6 +16,10 @@
     status = "okay";
 };
 
+&spi2 {
+    status = "disabled";
+};
+
 &pinctrl {
     reel_left_lcd_spi3_default: reel_left_lcd_spi3_default {
         group1 {
