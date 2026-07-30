@@ -99,6 +99,44 @@
       box-shadow: 0 0 0 4px rgba(0, 127, 123, 0.12);
     }
 
+    .device-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .device-status[data-state="connected"]::before {
+      background: var(--lime);
+      box-shadow: 0 0 0 4px rgba(185, 215, 0, 0.18);
+    }
+
+    .device-status[data-state="error"] {
+      color: #a34132;
+      border-color: rgba(200, 79, 61, 0.25);
+      background: rgba(255, 232, 226, 0.82);
+    }
+
+    .device-status[data-state="error"]::before {
+      background: var(--coral);
+      box-shadow: 0 0 0 4px rgba(239, 106, 83, 0.14);
+    }
+
+    .device-connect {
+      padding: 8px 13px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      color: white;
+      background: var(--ink);
+      font-size: 11px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .device-connect:hover {
+      background: var(--teal);
+      border-color: var(--teal);
+    }
+
     .hero {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -577,6 +615,65 @@
     .ghost:hover {
       border-color: rgba(0, 127, 123, 0.42);
       color: var(--teal);
+    }
+
+    .device-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 13px;
+    }
+
+    .device-actions .ghost {
+      min-width: 0;
+    }
+
+    .device-actions button:disabled,
+    .device-connect:disabled {
+      cursor: wait;
+      opacity: 0.54;
+    }
+
+    .apply-matrix {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--teal);
+      border-radius: 12px;
+      color: white;
+      background: var(--teal);
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .apply-matrix:hover {
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+
+    .auto-apply {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 11px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .auto-apply input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--teal);
+    }
+
+    .device-detail {
+      min-height: 1.5em;
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.5;
     }
 
     .results {
@@ -1111,6 +1208,16 @@
         line-height: 1.3;
       }
 
+      .device-toolbar {
+        align-items: flex-end;
+        flex-direction: column-reverse;
+        gap: 5px;
+      }
+
+      .device-connect {
+        padding: 7px 10px;
+      }
+
       .hero {
         padding-top: 40px;
       }
@@ -1181,7 +1288,10 @@
       <span class="brand-mark">R</span>
       <span>Trackball Profiler</span>
     </div>
-    <div class="no-log">ファームウェアログ不要</div>
+    <div class="device-toolbar">
+      <div id="deviceStatus" class="no-log device-status" data-state="idle">RMK 未接続</div>
+      <button id="connectDevice" class="device-connect" type="button">ワイヤレス接続</button>
+    </div>
   </header>
 
   <main class="shell">
@@ -1247,17 +1357,26 @@
             <div class="matrix-input" aria-label="現在の2行2列変換行列">
               <span class="bracket left"></span>
               <div class="matrix-fields">
-                <input id="f00" value="0" inputmode="decimal" aria-label="F 1行1列">
-                <input id="f01" value="0.8" inputmode="decimal" aria-label="F 1行2列">
-                <input id="f10" value="-1" inputmode="decimal" aria-label="F 2行1列">
-                <input id="f11" value="0.8" inputmode="decimal" aria-label="F 2行2列">
+                <input id="f00" value="-0.265" inputmode="decimal" aria-label="F 1行1列">
+                <input id="f01" value="1.142" inputmode="decimal" aria-label="F 1行2列">
+                <input id="f10" value="-0.831" inputmode="decimal" aria-label="F 2行1列">
+                <input id="f11" value="0.562" inputmode="decimal" aria-label="F 2行2列">
               </div>
               <span class="bracket right"></span>
             </div>
             <p class="matrix-note">
-              現在の <code>trackball_transform.c</code> に合わせた初期値です。
-              変更中ならここだけ書き換えてください。
+              接続するとRMKに保存済みの値を自動で読み込みます。
+              未接続時は現在の標準値です。
             </p>
+            <div class="device-actions">
+              <button id="readMatrix" class="ghost" type="button" disabled>端末から再読込</button>
+              <button id="applyMatrix" class="apply-matrix" type="button" disabled>この行列を適用</button>
+            </div>
+            <label class="auto-apply">
+              <input id="autoApply" type="checkbox" checked>
+              計測完了後、最終行列を自動で保存・反映
+            </label>
+            <p id="deviceDetail" class="device-detail">Chrome / EdgeのWebHIDで、USBまたはBLE接続中のReeLへ書き込みます。</p>
           </section>
 
           <section>
@@ -1382,10 +1501,10 @@
         <div class="preview-heading">
           <div>
             <p class="eyebrow">Live feel preview</p>
-            <h2>書き込む前に、操作感を試す。</h2>
+            <h2>操作感を、その場で試す。</h2>
             <p>
-              仮想カーソルへ補正行列をリアルタイム適用します。
-              補正前と補正後を切り替えながら、ターゲットへ自然に到達できるか試してください。
+              自動反映をオフにすると仮想カーソルで補正前後を比較できます。
+              RMKへ反映した後は、実際のカーソルで新しい操作感を確かめてください。
             </p>
           </div>
           <div class="preview-shortcuts">SPACE: 補正前 / 補正後<br>C: 中央へ戻す　ESC: 終了</div>
@@ -1480,6 +1599,12 @@
     const correctedModeButton = document.getElementById("correctedModeButton");
     const recenterButton = document.getElementById("recenterButton");
     const targetHits = document.getElementById("targetHits");
+    const connectDeviceButton = document.getElementById("connectDevice");
+    const deviceStatus = document.getElementById("deviceStatus");
+    const deviceDetail = document.getElementById("deviceDetail");
+    const readMatrixButton = document.getElementById("readMatrix");
+    const applyMatrixButton = document.getElementById("applyMatrix");
+    const autoApply = document.getElementById("autoApply");
 
     let samples = [];
     let active = false;
@@ -1498,6 +1623,25 @@
     let previewY = 0;
     let previewTargetIndex = 0;
     let hitCount = 0;
+    let hidDevice = null;
+    let pendingHidRequest = null;
+    let calibrationMacroOffset = null;
+    let autoApplyTimer = 0;
+    let lastReplacement = null;
+    let resultApplied = false;
+
+    const REEL_VENDOR_ID = 0x4c4b;
+    const REEL_PRODUCT_ID = 0x524d;
+    const VIA_GET_MACRO_BUFFER_SIZE = 0x0d;
+    const VIA_GET_MACRO_BUFFER = 0x0e;
+    const VIA_SET_MACRO_BUFFER = 0x0f;
+    const CALIBRATION_BLOB_SIZE = 28;
+    const CALIBRATION_SCALE = 1000;
+    const CALIBRATION_MAGIC = [0x52, 0x4c, 0x43, 0x31];
+    const DEFAULT_FIRMWARE_MATRIX = [
+      [-0.265, 1.142],
+      [-0.831, 0.562]
+    ];
 
     const previewTargets = [
       [0.78, 0.22],
@@ -1509,6 +1653,261 @@
       [0.16, 0.50],
       [0.84, 0.50]
     ];
+
+    function setDeviceState(state, label, detail = "") {
+      deviceStatus.dataset.state = state;
+      deviceStatus.textContent = label;
+      if (detail) deviceDetail.textContent = detail;
+      const connected = Boolean(hidDevice?.opened) && state !== "idle";
+      readMatrixButton.disabled = !connected;
+      applyMatrixButton.disabled = !connected || resultApplied;
+      connectDeviceButton.textContent = connected ? "切断" : "ワイヤレス接続";
+    }
+
+    function setMatrixInputs(matrix) {
+      const values = [matrix[0][0], matrix[0][1], matrix[1][0], matrix[1][1]];
+      ["f00", "f01", "f10", "f11"].forEach((id, index) => {
+        document.getElementById(id).value = formatNumber(values[index], 6);
+      });
+    }
+
+    function fnv1a(bytes) {
+      let hash = 0x811c9dc5;
+      for (const byte of bytes) {
+        hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
+      }
+      return hash;
+    }
+
+    function matrixToFixed(matrix) {
+      const values = [
+        matrix[0][0],
+        matrix[0][1],
+        matrix[1][0],
+        matrix[1][1]
+      ].map(value => Math.round(value * CALIBRATION_SCALE));
+      if (values.some(value => !Number.isSafeInteger(value) || Math.abs(value) > 16000)) {
+        throw new Error("係数が安全範囲を超えています");
+      }
+      const determinant = values[0] * values[3] - values[1] * values[2];
+      if (Math.abs(determinant) < 10000) {
+        throw new Error("行列が特異に近すぎます");
+      }
+      return values;
+    }
+
+    function encodeCalibrationBlob(matrix) {
+      const fixed = matrixToFixed(matrix);
+      const bytes = new Uint8Array(CALIBRATION_BLOB_SIZE);
+      bytes.set(CALIBRATION_MAGIC, 0);
+      bytes[4] = 1;
+      const view = new DataView(bytes.buffer);
+      view.setUint16(6, CALIBRATION_SCALE, true);
+      fixed.forEach((value, index) => view.setInt32(8 + index * 4, value, true));
+      view.setUint32(24, fnv1a(bytes.subarray(0, 24)), true);
+      return bytes;
+    }
+
+    function decodeCalibrationBlob(bytes) {
+      if (bytes.length !== CALIBRATION_BLOB_SIZE) return null;
+      if (!CALIBRATION_MAGIC.every((value, index) => bytes[index] === value)) return null;
+      if (bytes[4] !== 1 || bytes[5] !== 0) return null;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      if (view.getUint16(6, true) !== CALIBRATION_SCALE) return null;
+      if (view.getUint32(24, true) !== fnv1a(bytes.subarray(0, 24))) return null;
+      const values = Array.from({ length: 4 }, (_, index) => view.getInt32(8 + index * 4, true));
+      const matrix = [
+        [values[0] / CALIBRATION_SCALE, values[1] / CALIBRATION_SCALE],
+        [values[2] / CALIBRATION_SCALE, values[3] / CALIBRATION_SCALE]
+      ];
+      try {
+        matrixToFixed(matrix);
+        return matrix;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function handleHidInputReport(event) {
+      if (!pendingHidRequest || event.device !== hidDevice) return;
+      const response = new Uint8Array(
+        event.data.buffer,
+        event.data.byteOffset,
+        event.data.byteLength
+      );
+      if (response[0] !== pendingHidRequest.command) return;
+      window.clearTimeout(pendingHidRequest.timeout);
+      const resolve = pendingHidRequest.resolve;
+      pendingHidRequest = null;
+      resolve(new Uint8Array(response));
+    }
+
+    function cancelPendingHidRequest(message) {
+      if (!pendingHidRequest) return;
+      window.clearTimeout(pendingHidRequest.timeout);
+      const reject = pendingHidRequest.reject;
+      pendingHidRequest = null;
+      reject(new Error(message));
+    }
+
+    async function sendViaPacket(packet) {
+      if (!hidDevice?.opened) throw new Error("ReeLが接続されていません");
+      if (pendingHidRequest) throw new Error("前の設定通信が完了していません");
+      const response = new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          pendingHidRequest = null;
+          reject(new Error("ReeLから応答がありません"));
+        }, 1800);
+        pendingHidRequest = { command: packet[0], resolve, reject, timeout };
+      });
+      try {
+        await hidDevice.sendReport(0, packet);
+      } catch (error) {
+        window.clearTimeout(pendingHidRequest?.timeout);
+        pendingHidRequest = null;
+        throw error;
+      }
+      return response;
+    }
+
+    async function discoverCalibrationOffset() {
+      const packet = new Uint8Array(32);
+      packet[0] = VIA_GET_MACRO_BUFFER_SIZE;
+      const response = await sendViaPacket(packet);
+      const macroSize = response[1] * 256 + response[2];
+      if (macroSize < CALIBRATION_BLOB_SIZE) {
+        throw new Error(`RMKの設定領域が不足しています (${macroSize} bytes)`);
+      }
+      calibrationMacroOffset = macroSize - CALIBRATION_BLOB_SIZE;
+      return calibrationMacroOffset;
+    }
+
+    async function readCalibrationFromDevice() {
+      const offset = calibrationMacroOffset ?? await discoverCalibrationOffset();
+      const packet = new Uint8Array(32);
+      packet[0] = VIA_GET_MACRO_BUFFER;
+      packet[1] = offset >> 8;
+      packet[2] = offset & 0xff;
+      packet[3] = CALIBRATION_BLOB_SIZE;
+      const response = await sendViaPacket(packet);
+      const matrix = decodeCalibrationBlob(response.slice(4, 4 + CALIBRATION_BLOB_SIZE));
+      if (!matrix) throw new Error("保存済み調整値を検証できません");
+      setMatrixInputs(matrix);
+      resetSession(true);
+      deviceDetail.textContent = `保存値を読込済み · macro offset ${offset}`;
+      showToast("RMKから調整値を読み込みました");
+      return matrix;
+    }
+
+    async function writeCalibrationToDevice(matrix, automatic = false) {
+      const offset = calibrationMacroOffset ?? await discoverCalibrationOffset();
+      const blob = encodeCalibrationBlob(matrix);
+      const packet = new Uint8Array(32);
+      packet[0] = VIA_SET_MACRO_BUFFER;
+      packet[1] = offset >> 8;
+      packet[2] = offset & 0xff;
+      packet[3] = CALIBRATION_BLOB_SIZE;
+      packet.set(blob, 4);
+      await sendViaPacket(packet);
+      setMatrixInputs(matrix);
+      resultApplied = Boolean(lastReplacement);
+      applyMatrixButton.disabled = resultApplied;
+      sensitivity.disabled = resultApplied;
+      deviceDetail.textContent = automatic
+        ? "計測結果を自動保存しました。約25ms以内に新しい操作感へ切り替わります。"
+        : "行列をFlashへ保存しました。約25ms以内に新しい操作感へ切り替わります。";
+      showToast(automatic ? "RMKへ自動反映しました" : "RMKへ保存・反映しました");
+      if (resultApplied) {
+        document.getElementById("resultSummary").textContent =
+          "この結果はRMKへ保存済みです。続けて調整する場合は再計測してください";
+      }
+    }
+
+    function scheduleAutoApply(matrix) {
+      lastReplacement = matrix;
+      if (!autoApply.checked || !hidDevice?.opened || resultApplied) return;
+      window.clearTimeout(autoApplyTimer);
+      autoApplyTimer = window.setTimeout(async () => {
+        try {
+          await writeCalibrationToDevice(matrix, true);
+        } catch (error) {
+          setDeviceState("error", "RMK 書込失敗", error.message);
+          showToast(error.message);
+        }
+      }, 900);
+    }
+
+    function hasViaCollection(device) {
+      const visit = collection => collection.usagePage === 0xff60
+        || (collection.children || []).some(visit);
+      return (device.collections || []).some(visit);
+    }
+
+    async function attachHidDevice(device) {
+      if (!device.opened) await device.open();
+      if (hidDevice && hidDevice !== device) {
+        hidDevice.removeEventListener("inputreport", handleHidInputReport);
+      }
+      hidDevice = device;
+      hidDevice.addEventListener("inputreport", handleHidInputReport);
+      calibrationMacroOffset = null;
+      setDeviceState("connected", "RMK 接続済み", "保存済み行列を読み込んでいます…");
+      try {
+        await readCalibrationFromDevice();
+      } catch (error) {
+        setDeviceState("error", "RMK 読込失敗", error.message);
+        throw error;
+      }
+    }
+
+    async function connectOrDisconnectDevice() {
+      if (!("hid" in navigator)) {
+        setDeviceState("error", "WebHID 非対応", "ChromeまたはEdgeの最新版で開いてください。");
+        return;
+      }
+      connectDeviceButton.disabled = true;
+      try {
+        if (hidDevice?.opened) {
+          cancelPendingHidRequest("ReeLとの接続を切断しました");
+          hidDevice.removeEventListener("inputreport", handleHidInputReport);
+          await hidDevice.close();
+          hidDevice = null;
+          calibrationMacroOffset = null;
+          setDeviceState("idle", "RMK 未接続", "切断しました。計測機能はオフラインでも利用できます。");
+          return;
+        }
+        const devices = await navigator.hid.requestDevice({
+          filters: [{ vendorId: REEL_VENDOR_ID, productId: REEL_PRODUCT_ID }]
+        });
+        const device = devices.find(hasViaCollection) || devices[0];
+        if (!device) return;
+        await attachHidDevice(device);
+      } catch (error) {
+        setDeviceState("error", "RMK 接続失敗", error.message);
+        showToast(error.message);
+      } finally {
+        connectDeviceButton.disabled = false;
+      }
+    }
+
+    async function reconnectAuthorizedDevice() {
+      if (!("hid" in navigator)) {
+        setDeviceState("error", "WebHID 非対応", "ChromeまたはEdgeの最新版で開いてください。");
+        return;
+      }
+      const devices = await navigator.hid.getDevices();
+      const device = devices.find(candidate =>
+        candidate.vendorId === REEL_VENDOR_ID
+        && candidate.productId === REEL_PRODUCT_ID
+        && hasViaCollection(candidate)
+      );
+      if (!device) return;
+      try {
+        await attachHidDevice(device);
+      } catch (error) {
+        setDeviceState("error", "RMK 再接続失敗", error.message);
+      }
+    }
 
     function requestedRounds() {
       return Number(roundsSelect.value);
@@ -1669,6 +2068,9 @@
     function completeSession() {
       active = false;
       phase = "complete";
+      resultApplied = false;
+      sensitivity.disabled = false;
+      applyMatrixButton.disabled = !hidDevice?.opened;
       roundsSelect.disabled = false;
       clearTimeout(idleTimer);
       clearTimeout(cooldownTimer);
@@ -1697,6 +2099,11 @@
     function resetSession(hideResults = true) {
       active = false;
       phase = "idle";
+      resultApplied = false;
+      lastReplacement = null;
+      sensitivity.disabled = false;
+      applyMatrixButton.disabled = !hidDevice?.opened;
+      window.clearTimeout(autoApplyTimer);
       samples = [];
       currentIndex = 0;
       sumX = 0;
@@ -1722,7 +2129,7 @@
     }
 
     function previewCorrection() {
-      if (previewMode === "raw" || !fittedBase) return [[1, 0], [0, 1]];
+      if (previewMode === "raw" || !fittedBase || resultApplied) return [[1, 0], [0, 1]];
       return scaleMatrix(fittedBase, Number(sensitivity.value) / 100);
     }
 
@@ -2119,11 +2526,14 @@ self.output_y_remainder =
 
       const code = buildCode(replacement);
       document.getElementById("codeOutput").textContent = code;
+      lastReplacement = replacement;
+      applyMatrixButton.disabled = !hidDevice?.opened || resultApplied;
       copyPayloads = {
         correction: matrixText(correction),
         replacement: matrixText(replacement),
         code
       };
+      scheduleAutoApply(replacement);
     }
 
     async function copyText(text) {
@@ -2150,6 +2560,45 @@ self.output_y_remainder =
 
     startButton.addEventListener("click", requestCapture);
     resetButton.addEventListener("click", () => resetSession(true));
+    connectDeviceButton.addEventListener("click", connectOrDisconnectDevice);
+    readMatrixButton.addEventListener("click", async () => {
+      readMatrixButton.disabled = true;
+      try {
+        await readCalibrationFromDevice();
+      } catch (error) {
+        setDeviceState("error", "RMK 読込失敗", error.message);
+        showToast(error.message);
+      } finally {
+        readMatrixButton.disabled = !hidDevice?.opened;
+      }
+    });
+    applyMatrixButton.addEventListener("click", async () => {
+      applyMatrixButton.disabled = true;
+      try {
+        await writeCalibrationToDevice(lastReplacement || currentFirmwareMatrix());
+      } catch (error) {
+        setDeviceState("error", "RMK 書込失敗", error.message);
+        showToast(error.message);
+      } finally {
+        applyMatrixButton.disabled = !hidDevice?.opened || resultApplied;
+      }
+    });
+    autoApply.addEventListener("change", () => {
+      if (autoApply.checked && lastReplacement && !resultApplied) {
+        scheduleAutoApply(lastReplacement);
+      } else {
+        window.clearTimeout(autoApplyTimer);
+      }
+    });
+    if ("hid" in navigator) {
+      navigator.hid.addEventListener("disconnect", event => {
+        if (event.device !== hidDevice) return;
+        cancelPendingHidRequest("ReeLとの接続が切れました");
+        hidDevice = null;
+        calibrationMacroOffset = null;
+        setDeviceState("idle", "RMK 未接続", "ReeLとの接続が切れました。");
+      });
+    }
     traceToggle.addEventListener("click", () => {
       showObservedVector = !showObservedVector;
       traceToggle.classList.toggle("on", showObservedVector);
@@ -2231,10 +2680,15 @@ self.output_y_remainder =
       applyMatrix,
       multiplyMatrices,
       angleError,
+      fnv1a,
+      encodeCalibrationBlob,
+      decodeCalibrationBlob,
+      defaultFirmwareMatrix: DEFAULT_FIRMWARE_MATRIX,
       directions
     };
 
     renderDirectionList();
+    reconnectAuthorizedDevice();
   </script>
 </body>
 </html>

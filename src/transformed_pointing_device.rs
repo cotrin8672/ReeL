@@ -6,6 +6,7 @@ use rmk::event::{Axis, AxisEvent, AxisValType, PointingEvent};
 use rmk::input_device::pointing::{InitState, PointingDriver};
 use rmk::macros::input_device;
 
+use crate::calibration_config::current_matrix;
 use crate::trackball_transform::TrackballTransform;
 
 #[input_device(publish = PointingEvent)]
@@ -99,7 +100,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         self.accumulated_x = 0;
         self.accumulated_y = 0;
 
-        let (x, y) = self.transform.apply(raw_x, raw_y);
+        let (x, y) = self.transform.apply(raw_x, raw_y, current_matrix());
 
         Some(PointingEvent {
             device_id: self.id,

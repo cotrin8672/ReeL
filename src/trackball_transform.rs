@@ -1,8 +1,6 @@
+use crate::calibration_config::MatrixCoefficients;
+
 pub const MATRIX_SCALE: i64 = 1000;
-pub const MATRIX_M00: i64 = -265;
-pub const MATRIX_M01: i64 = 1142;
-pub const MATRIX_M10: i64 = -831;
-pub const MATRIX_M11: i64 = 562;
 
 #[derive(Default)]
 pub struct TrackballTransform {
@@ -18,11 +16,13 @@ impl TrackballTransform {
         }
     }
 
-    pub fn apply(&mut self, raw_x: i16, raw_y: i16) -> (i16, i16) {
-        let output_x_numerator =
-            i64::from(raw_x) * MATRIX_M00 + i64::from(raw_y) * MATRIX_M01 + self.output_x_remainder;
-        let output_y_numerator =
-            i64::from(raw_x) * MATRIX_M10 + i64::from(raw_y) * MATRIX_M11 + self.output_y_remainder;
+    pub fn apply(&mut self, raw_x: i16, raw_y: i16, matrix: MatrixCoefficients) -> (i16, i16) {
+        let output_x_numerator = i64::from(raw_x) * i64::from(matrix.m00)
+            + i64::from(raw_y) * i64::from(matrix.m01)
+            + self.output_x_remainder;
+        let output_y_numerator = i64::from(raw_x) * i64::from(matrix.m10)
+            + i64::from(raw_y) * i64::from(matrix.m11)
+            + self.output_y_remainder;
 
         let output_x = output_x_numerator / MATRIX_SCALE;
         let output_y = output_y_numerator / MATRIX_SCALE;
@@ -44,29 +44,38 @@ mod tests {
     #[test]
     fn applies_calibrated_matrix() {
         let mut transform = TrackballTransform::new();
-        assert_eq!(transform.apply(1000, 0), (-265, -831));
-        assert_eq!(transform.apply(0, 1000), (1142, 562));
+        assert_eq!(
+            transform.apply(1000, 0, MatrixCoefficients::DEFAULT),
+            (-265, -831)
+        );
+        assert_eq!(
+            transform.apply(0, 1000, MatrixCoefficients::DEFAULT),
+            (1142, 562)
+        );
     }
 
     #[test]
     fn retains_fractional_motion() {
         let mut transform = TrackballTransform::new();
-        assert_eq!(transform.apply(1, 0), (0, 0));
-        assert_eq!(transform.apply(1, 0), (0, -1));
-        assert_eq!(transform.apply(1, 0), (0, -1));
-        assert_eq!(transform.apply(1, 0), (-1, -1));
+        assert_eq!(transform.apply(1, 0, MatrixCoefficients::DEFAULT), (0, 0));
+        assert_eq!(transform.apply(1, 0, MatrixCoefficients::DEFAULT), (0, -1));
+        assert_eq!(transform.apply(1, 0, MatrixCoefficients::DEFAULT), (0, -1));
+        assert_eq!(transform.apply(1, 0, MatrixCoefficients::DEFAULT), (-1, -1));
     }
 
     #[test]
-    fn uses_truncation_toward_zero_like_the_zmk_implementation() {
+    fn uses_truncation_toward_zero() {
         let mut transform = TrackballTransform::new();
-        assert_eq!(transform.apply(1, 0), (0, 0));
-        assert_eq!(transform.apply(-1, 0), (0, 0));
+        assert_eq!(transform.apply(1, 0, MatrixCoefficients::DEFAULT), (0, 0));
+        assert_eq!(transform.apply(-1, 0, MatrixCoefficients::DEFAULT), (0, 0));
     }
 
     #[test]
     fn clamps_to_i16() {
         let mut transform = TrackballTransform::new();
-        assert_eq!(transform.apply(i16::MIN, i16::MAX), (i16::MAX, i16::MAX));
+        assert_eq!(
+            transform.apply(i16::MIN, i16::MAX, MatrixCoefficients::DEFAULT),
+            (i16::MAX, i16::MAX)
+        );
     }
 }

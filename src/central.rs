@@ -4,6 +4,7 @@
 mod keymap;
 #[macro_use]
 mod macros;
+mod calibration_config;
 mod trackball_transform;
 mod transformed_pointing_device;
 mod vial;
@@ -44,6 +45,8 @@ use static_cell::StaticCell;
 
 use transformed_pointing_device::TransformingPointingDevice;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+
+use calibration_config::CalibrationConfigWatcher;
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
@@ -189,6 +192,8 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 5, true, 0, 6>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
     let host_context = rmk::host::KeyboardContext::new(&keymap);
+    let mut calibration_config = CalibrationConfigWatcher::new(&host_context);
+    calibration_config.initialize().await;
     let mut host_service = HostService::new(&host_context, &rmk_config);
 
     let pmw_sck = Output::new(p.P1_13, Level::High, OutputDrive::Standard);
@@ -224,6 +229,7 @@ async fn main(spawner: Spawner) {
             trackball,
             pointing_processor,
             auto_mouse_layer,
+            calibration_config,
             storage,
             usb_transport,
             ble_transport,

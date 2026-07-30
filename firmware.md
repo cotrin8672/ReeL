@@ -24,6 +24,24 @@ memory LCDs are intentionally outside the current RMK port.
 - Left encoder mapped to vertical scrolling on every layer
 - BLE/USB Vial support with flash-backed keymap storage
 
+## Browser trackball calibration
+
+Open `tools/trackball-profiler.html` in Chrome or Edge and select
+**ワイヤレス接続**. The profiler uses RMK's existing vendor-defined Vial HID
+collection, so the same page works through either USB or the bonded BLE
+keyboard connection.
+
+The last 28 bytes of RMK's macro buffer are reserved for a versioned `RLC1`
+calibration record. The record contains the four fixed-point matrix
+coefficients and an FNV-1a checksum. A valid write is persisted by RMK's normal
+flash-backed Vial path and is applied to the live pointing pipeline within
+25 ms; reflashing or rebooting is not required.
+
+The profiler reads the current matrix on connection. With automatic apply
+enabled, it writes the fitted replacement matrix after measurement settles.
+The firmware rejects corrupt, near-singular, and excessively large matrices
+and keeps the last valid value.
+
 ## Build outputs
 
 The `Build RMK firmware` GitHub Actions workflow produces:
