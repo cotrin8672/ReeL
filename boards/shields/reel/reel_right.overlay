@@ -98,4 +98,10 @@
     chosen {
         zephyr,display = &beekeeb_lcd;
     };
+
+    auto_mouse_layer: auto_mouse_layer {
+        compatible = "zmk,input-processor-temp-layer";
+        #input-processor-cells = <2>;
+        excluded-positions = <17 18>;
+    };
 };
