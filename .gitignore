@@ -8,6 +8,11 @@ fp-info-cache
 /.cache/zmk/
 /build/firmware/
 
+# RMK build output and converted firmware
+/target/
+/*.hex
+/*.uf2
+
 # Local validation output
 /tmp/
 
