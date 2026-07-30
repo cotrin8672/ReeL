@@ -1368,7 +1368,7 @@
           <section class="output-block">
             <div class="output-head">
               <div>
-                <h3>ZMK / C 固定小数点スニペット</h3>
+                <h3>RMK / Rust 固定小数点スニペット</h3>
                 <p>係数は1000倍。正負両方向の端数も保持します。</p>
               </div>
               <button class="copy" type="button" data-copy="code">COPY</button>
@@ -1995,32 +1995,28 @@
     function buildCode(matrix) {
       const scale = 1000;
       const values = matrix.map(row => row.map(value => Math.round(value * scale)));
-      return `#define TRACKBALL_MATRIX_SCALE ${scale}
-#define TRACKBALL_M00 ${values[0][0]}
-#define TRACKBALL_M01 ${values[0][1]}
-#define TRACKBALL_M10 ${values[1][0]}
-#define TRACKBALL_M11 ${values[1][1]}
+      return `pub const MATRIX_SCALE: i64 = ${scale};
+pub const MATRIX_M00: i64 = ${values[0][0]};
+pub const MATRIX_M01: i64 = ${values[0][1]};
+pub const MATRIX_M10: i64 = ${values[1][0]};
+pub const MATRIX_M11: i64 = ${values[1][1]};
 
-static int64_t output_x_remainder;
-static int64_t output_y_remainder;
+let output_x_numerator =
+    i64::from(raw_x) * MATRIX_M00
+    + i64::from(raw_y) * MATRIX_M01
+    + self.output_x_remainder;
+let output_y_numerator =
+    i64::from(raw_x) * MATRIX_M10
+    + i64::from(raw_y) * MATRIX_M11
+    + self.output_y_remainder;
 
-/* Replace the current output_x / output_y calculation with this block. */
-int64_t output_x_numerator =
-    (int64_t)raw_x * TRACKBALL_M00 +
-    (int64_t)raw_y * TRACKBALL_M01 +
-    output_x_remainder;
-int64_t output_y_numerator =
-    (int64_t)raw_x * TRACKBALL_M10 +
-    (int64_t)raw_y * TRACKBALL_M11 +
-    output_y_remainder;
+let output_x = output_x_numerator / MATRIX_SCALE;
+let output_y = output_y_numerator / MATRIX_SCALE;
 
-int32_t output_x = (int32_t)(output_x_numerator / TRACKBALL_MATRIX_SCALE);
-int32_t output_y = (int32_t)(output_y_numerator / TRACKBALL_MATRIX_SCALE);
-
-output_x_remainder =
-    output_x_numerator - (int64_t)output_x * TRACKBALL_MATRIX_SCALE;
-output_y_remainder =
-    output_y_numerator - (int64_t)output_y * TRACKBALL_MATRIX_SCALE;`;
+self.output_x_remainder =
+    output_x_numerator - output_x * MATRIX_SCALE;
+self.output_y_remainder =
+    output_y_numerator - output_y * MATRIX_SCALE;`;
     }
 
     function plotResults(correction) {

@@ -4,10 +4,6 @@
 *.kicad_*.lck
 fp-info-cache
 
-# ZMK build cache and generated firmware
-/.cache/zmk/
-/build/firmware/
-
 # RMK build output and converted firmware
 /target/
 /*.hex

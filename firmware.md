@@ -8,7 +8,7 @@ memory LCDs are intentionally outside the current RMK port.
 ## Implemented setup
 
 - 4x11 unified matrix with the same 41 physical positions and four layers as
-  the main ZMK firmware
+  the previous firmware
 - BLE split with the right half at columns 6..10 and the left half at columns
   0..5
 - PMW3610 at 1200 CPI and 125 Hz on the right half
