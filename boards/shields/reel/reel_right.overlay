@@ -52,7 +52,6 @@
         zephyr,axis-y = <INPUT_REL_X>;
         res-cpi = <1200>;
         invert-x;
-        invert-y;
         smart-mode;
     };
 };
@@ -61,5 +60,6 @@
     trackball_listener: trackball_listener {
         compatible = "zmk,input-listener";
         device = <&trackball>;
+        input-processors = <&zip_x_scaler 4 5>;
     };
 };
