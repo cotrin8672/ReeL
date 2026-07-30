@@ -1839,6 +1839,7 @@ dependencies = [
  "nrf-sdc",
  "panic-probe",
  "rmk",
+ "rmk-types",
  "static_cell",
  "usbd-hid",
  "xz2",
