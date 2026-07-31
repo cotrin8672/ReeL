@@ -13,6 +13,7 @@ mod vial;
 
 use defmt::{info, unwrap};
 use defmt_rtt as _;
+use embassy_embedded_hal::flash::partition::Partition;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Flex, Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
@@ -20,6 +21,8 @@ use embassy_nrf::peripherals::{RNG, USBD};
 use embassy_nrf::usb::Driver;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::{bind_interrupts, rng, usb};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::mutex::Mutex;
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -52,7 +55,10 @@ use smart_aml_trigger::SmartAutoMouseTrigger;
 use transformed_pointing_device::TransformingPointingDevice;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
-use calibration_config::CalibrationConfigWatcher;
+use calibration_config::{
+    CALIBRATION_FLASH_SIZE, CALIBRATION_FLASH_START, CalibrationConfigWatcher,
+    RMK_STORAGE_FLASH_SIZE, RMK_STORAGE_FLASH_START, recover_legacy_matrix,
+};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
@@ -75,6 +81,9 @@ const L2CAP_MTU: usize = 251;
 const TRACKBALL_DEVICE_ID: u8 = 0;
 const AML_TRIGGER_DEVICE_ID: u8 = 1;
 const AML_TRIGGER_THRESHOLD: u16 = 3;
+const NRF52840_FLASH_SIZE: u32 = 1024 * 1024;
+
+static SHARED_FLASH: StaticCell<Mutex<ThreadModeRawMutex, Flash<'static>>> = StaticCell::new();
 
 fn build_sdc<'d, const N: usize>(
     peripherals: nrf_sdc::Peripherals<'d>,
@@ -146,7 +155,19 @@ async fn main(spawner: Spawner) {
     let stack = build_ble_stack(sdc, ble_addr(), &mut host_resources).await;
 
     let usb_driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
-    let flash = Flash::take(mpsl, p.NVMC);
+    let shared_flash = SHARED_FLASH.init(Mutex::new(Flash::take(mpsl, p.NVMC)));
+    let storage_flash = Partition::new(shared_flash, 0, NRF52840_FLASH_SIZE);
+    let mut legacy_calibration_flash = Partition::new(
+        shared_flash,
+        RMK_STORAGE_FLASH_START,
+        RMK_STORAGE_FLASH_SIZE,
+    );
+    let migration_matrix = recover_legacy_matrix(&mut legacy_calibration_flash).await;
+    let calibration_flash = Partition::new(
+        shared_flash,
+        CALIBRATION_FLASH_START,
+        CALIBRATION_FLASH_SIZE,
+    );
 
     let (row_pins, col_pins) = config_matrix_pins_nrf!(
         peripherals: p,
@@ -202,7 +223,7 @@ async fn main(spawner: Spawner) {
     let positional_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
         &mut keymap_data,
-        flash,
+        storage_flash,
         &storage_config,
         &mut behavior_config,
         &positional_config,
@@ -213,7 +234,11 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 5, true, 0, 6>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
     let host_context = rmk::host::KeyboardContext::new(&keymap);
-    let mut calibration_config = CalibrationConfigWatcher::new(&host_context);
+    let mut calibration_config = CalibrationConfigWatcher::with_migration(
+        &host_context,
+        calibration_flash,
+        migration_matrix,
+    );
     calibration_config.initialize().await;
     let mut host_service = HostService::new(&host_context, &rmk_config);
 
