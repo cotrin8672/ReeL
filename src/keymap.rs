@@ -46,9 +46,9 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
 
 pub const fn get_default_encoder_map() -> [[EncoderAction; NUM_ENCODER]; NUM_LAYER] {
     [
-        [encoder!(k!(MouseWheelUp), k!(MouseWheelDown))],
-        [encoder!(k!(MouseWheelUp), k!(MouseWheelDown))],
-        [encoder!(k!(MouseWheelUp), k!(MouseWheelDown))],
-        [encoder!(k!(MouseWheelUp), k!(MouseWheelDown))],
+        [encoder!(k!(PageUp), k!(PageDown))],
+        [encoder!(k!(PageUp), k!(PageDown))],
+        [encoder!(k!(PageUp), k!(PageDown))],
+        [encoder!(k!(PageUp), k!(PageDown))],
     ]
 }
