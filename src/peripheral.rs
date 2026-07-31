@@ -129,7 +129,8 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
     let encoder_a = Input::new(p.P1_14, Pull::Up);
     let encoder_b = Input::new(p.P1_15, Pull::Up);
-    let mut encoder = RotaryEncoder::with_resolution(encoder_a, encoder_b, 4, false, 0);
+    // BM4.0A01: 9 pulses/revolution; emit once per two valid phase transitions.
+    let mut encoder = RotaryEncoder::with_resolution(encoder_a, encoder_b, 2, false, 0);
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
     join(
