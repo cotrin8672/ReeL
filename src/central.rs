@@ -6,6 +6,7 @@ mod keymap;
 mod macros;
 mod calibration_config;
 mod quick_mod_tap;
+mod sharp_lcd;
 mod smart_aml_trigger;
 mod trackball_transform;
 mod transformed_pointing_device;
@@ -17,10 +18,10 @@ use embassy_embedded_hal::flash::partition::Partition;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Flex, Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{RNG, USBD};
+use embassy_nrf::peripherals::{RNG, SPI3, USBD};
 use embassy_nrf::usb::Driver;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
-use embassy_nrf::{bind_interrupts, rng, usb};
+use embassy_nrf::{bind_interrupts, rng, spim, usb};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::mutex::Mutex;
 use nrf_mpsl::Flash;
@@ -51,6 +52,7 @@ use rmk::{
 use static_cell::StaticCell;
 
 use quick_mod_tap::QuickModTap;
+use sharp_lcd::SharpLcd;
 use smart_aml_trigger::SmartAutoMouseTrigger;
 use transformed_pointing_device::TransformingPointingDevice;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -68,6 +70,7 @@ bind_interrupts!(struct Irqs {
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
     TIMER0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
     RTC0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
+    SPIM3 => spim::InterruptHandler<SPI3>;
 });
 
 #[embassy_executor::task]
@@ -124,6 +127,14 @@ async fn main(spawner: Spawner) {
     nrf_config.dcdc.reg0 = true;
     nrf_config.dcdc.reg1 = true;
     let p = embassy_nrf::init(nrf_config);
+
+    let mut lcd_spi_config = spim::Config::default();
+    lcd_spi_config.frequency = spim::Frequency::M1;
+    lcd_spi_config.mode = spim::MODE_0;
+    lcd_spi_config.bit_order = spim::BitOrder::LsbFirst;
+    let lcd_spi = spim::Spim::new_txonly(p.SPI3, Irqs, p.P1_00, p.P0_16, lcd_spi_config);
+    let lcd_cs = Output::new(p.P1_10, Level::Low, OutputDrive::Standard);
+    let mut lcd = SharpLcd::new(lcd_spi, lcd_cs);
 
     let mpsl_peripherals =
         mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
@@ -287,7 +298,8 @@ async fn main(spawner: Spawner) {
             ble_transport,
             keyboard,
             host_service,
-            watchdog
+            watchdog,
+            lcd
         ),
         join(
             run_peripheral_manager::<4, 6, 0, 0, _>(0, &peripheral_addrs, &stack),

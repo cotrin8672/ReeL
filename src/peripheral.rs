@@ -3,14 +3,15 @@
 
 #[macro_use]
 mod macros;
+mod sharp_lcd;
 
 use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Input, Pull};
+use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{RNG, USBD};
-use embassy_nrf::{bind_interrupts, rng, usb};
+use embassy_nrf::peripherals::{RNG, SPI3, USBD};
+use embassy_nrf::{bind_interrupts, rng, spim, usb};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -28,6 +29,8 @@ use rmk::storage::new_storage_for_split_peripheral;
 use rmk::watchdog::Nrf52Watchdog;
 use static_cell::StaticCell;
 
+use sharp_lcd::SharpLcd;
+
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
     RNG => rng::InterruptHandler<RNG>;
@@ -36,6 +39,7 @@ bind_interrupts!(struct Irqs {
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
     TIMER0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
     RTC0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
+    SPIM3 => spim::InterruptHandler<SPI3>;
 });
 
 #[embassy_executor::task]
@@ -81,6 +85,14 @@ async fn main(spawner: Spawner) {
     nrf_config.dcdc.reg0 = true;
     nrf_config.dcdc.reg1 = true;
     let p = embassy_nrf::init(nrf_config);
+
+    let mut lcd_spi_config = spim::Config::default();
+    lcd_spi_config.frequency = spim::Frequency::M1;
+    lcd_spi_config.mode = spim::MODE_0;
+    lcd_spi_config.bit_order = spim::BitOrder::LsbFirst;
+    let lcd_spi = spim::Spim::new_txonly(p.SPI3, Irqs, p.P1_00, p.P0_16, lcd_spi_config);
+    let lcd_cs = Output::new(p.P1_10, Level::Low, OutputDrive::Standard);
+    let mut lcd = SharpLcd::new(lcd_spi, lcd_cs);
 
     let mpsl_peripherals =
         mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
@@ -134,7 +146,7 @@ async fn main(spawner: Spawner) {
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
     join(
-        run_all!(matrix, encoder, storage, watchdog),
+        run_all!(matrix, encoder, storage, watchdog, lcd),
         run_rmk_split_peripheral(0, &stack),
     )
     .await;
