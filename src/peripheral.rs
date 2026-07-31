@@ -4,6 +4,7 @@
 #[macro_use]
 mod macros;
 mod sharp_lcd;
+mod xiao_battery;
 
 use defmt::{info, unwrap};
 use defmt_rtt as _;
@@ -11,7 +12,8 @@ use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SPI3, USBD};
-use embassy_nrf::{bind_interrupts, rng, spim, usb};
+use embassy_nrf::saadc::Input as _;
+use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -21,6 +23,7 @@ use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
+use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
 use rmk::run_all;
@@ -29,7 +32,10 @@ use rmk::storage::new_storage_for_split_peripheral;
 use rmk::watchdog::Nrf52Watchdog;
 use static_cell::StaticCell;
 
-use sharp_lcd::SharpLcd;
+use sharp_lcd::new_status_lcd;
+use xiao_battery::{
+    DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
+};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
@@ -40,6 +46,7 @@ bind_interrupts!(struct Irqs {
     TIMER0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
     RTC0 => nrf_sdc::mpsl::HighPrioInterruptHandler;
     SPIM3 => spim::InterruptHandler<SPI3>;
+    SAADC => saadc::InterruptHandler;
 });
 
 #[embassy_executor::task]
@@ -92,7 +99,12 @@ async fn main(spawner: Spawner) {
     lcd_spi_config.bit_order = spim::BitOrder::LsbFirst;
     let lcd_spi = spim::Spim::new_txonly(p.SPI3, Irqs, p.P1_00, p.P0_16, lcd_spi_config);
     let lcd_cs = Output::new(p.P1_10, Level::Low, OutputDrive::Standard);
-    let mut lcd = SharpLcd::new(lcd_spi, lcd_cs);
+    let (mut lcd, mut lcd_vcom) = new_status_lcd(lcd_spi, lcd_cs, false);
+
+    let mut battery_monitor =
+        XiaoBatteryMonitor::new(p.P0_31.degrade_saadc(), p.SAADC, p.P0_14).await;
+    let mut battery_processor = BatteryProcessor::new(DIVIDER_MEASURED, DIVIDER_TOTAL);
+    let mut battery_snapshot = PeripheralBatterySnapshot::new();
 
     let mpsl_peripherals =
         mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
@@ -146,7 +158,17 @@ async fn main(spawner: Spawner) {
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
     join(
-        run_all!(matrix, encoder, storage, watchdog, lcd),
+        run_all!(
+            matrix,
+            encoder,
+            storage,
+            watchdog,
+            battery_monitor,
+            battery_processor,
+            battery_snapshot,
+            lcd,
+            lcd_vcom
+        ),
         run_rmk_split_peripheral(0, &stack),
     )
     .await;
