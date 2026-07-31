@@ -5,6 +5,7 @@ mod keymap;
 #[macro_use]
 mod macros;
 mod calibration_config;
+mod quick_mod_tap;
 mod trackball_transform;
 mod transformed_pointing_device;
 mod vial;
@@ -36,6 +37,8 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
+use rmk::types::action::Action;
+use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::usb::UsbTransport;
 use rmk::watchdog::Nrf52Watchdog;
 use rmk::{
@@ -43,6 +46,7 @@ use rmk::{
 };
 use static_cell::StaticCell;
 
+use quick_mod_tap::QuickModTap;
 use transformed_pointing_device::TransformingPointingDevice;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -172,6 +176,18 @@ async fn main(spawner: Spawner) {
         keymap::get_default_encoder_map(),
     );
     let mut behavior_config = BehaviorConfig::default();
+    behavior_config
+        .morse
+        .morses
+        .push(
+            QuickModTap::new(
+                Action::Key(KeyCode::Hid(HidKeyCode::Backspace)),
+                Action::Modifier(rmk::types::modifier::ModifierCombination::RCTRL),
+                Action::Key(KeyCode::Hid(HidKeyCode::Backspace)),
+            )
+            .into_morse(),
+        )
+        .unwrap();
     behavior_config
         .auto_mouse_layer
         .push(AutoMouseLayerConfig::new(
