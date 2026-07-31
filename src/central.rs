@@ -157,9 +157,7 @@ async fn main(spawner: Spawner) {
     let storage_config = StorageConfig {
         start_addr: 0xA0000,
         num_sectors: 6,
-        // Refresh the compiled keymap and encoder map for this firmware.
-        // Set this back to false after the updated layout has been flashed once.
-        clear_layout: true,
+        clear_layout: false,
         ..Default::default()
     };
     let rmk_config = RmkConfig {
