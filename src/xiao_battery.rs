@@ -9,13 +9,13 @@ use rmk::embassy_futures::select::{Either, select};
 use rmk::event::{BatteryStatusEvent, EventSubscriber, SubscribableEvent, publish_event};
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 
-pub const DIVIDER_MEASURED: u32 = 499;
-pub const DIVIDER_TOTAL: u32 = 1499;
+pub const DIVIDER_MEASURED: u32 = 510;
+pub const DIVIDER_TOTAL: u32 = 1510;
 
-/// Battery monitor for the XIAO nRF52840 Plus onboard divider.
+/// Battery monitor for the XIAO nRF52840 onboard divider.
 pub struct XiaoBatteryMonitor {
     adc: NrfAdc<'static, 1, 1>,
-    // The Plus schematic requires P0.14 to remain a low-side sink while reading.
+    // The XIAO schematic requires P0.14 to remain a low-side sink while reading.
     _read_enable: Output<'static>,
 }
 
@@ -33,7 +33,7 @@ impl XiaoBatteryMonitor {
 
         let config = saadc::Config::default();
         let mut channel = saadc::ChannelConfig::single_ended(adc_pin);
-        // The 1 MOhm / 499 kOhm divider has a source impedance near 333 kOhm.
+        // The 1 MOhm / 510 kOhm divider has a source impedance near 338 kOhm.
         channel.time = saadc::Time::_40US;
         interrupt::SAADC.set_priority(interrupt::Priority::P3);
         let saadc = Saadc::new(adc, crate::Irqs, config, [channel]);
