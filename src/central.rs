@@ -6,6 +6,7 @@ mod keymap;
 mod macros;
 mod calibration_config;
 mod quick_mod_tap;
+mod smart_aml_trigger;
 mod trackball_transform;
 mod transformed_pointing_device;
 mod vial;
@@ -47,6 +48,7 @@ use rmk::{
 use static_cell::StaticCell;
 
 use quick_mod_tap::QuickModTap;
+use smart_aml_trigger::SmartAutoMouseTrigger;
 use transformed_pointing_device::TransformingPointingDevice;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -71,6 +73,8 @@ const L2CAP_TXQ: u8 = 3;
 const L2CAP_RXQ: u8 = 3;
 const L2CAP_MTU: usize = 251;
 const TRACKBALL_DEVICE_ID: u8 = 0;
+const AML_TRIGGER_DEVICE_ID: u8 = 1;
+const AML_TRIGGER_THRESHOLD: u16 = 3;
 
 fn build_sdc<'d, const N: usize>(
     peripherals: nrf_sdc::Peripherals<'d>,
@@ -191,10 +195,10 @@ async fn main(spawner: Spawner) {
     behavior_config
         .auto_mouse_layer
         .push(AutoMouseLayerConfig::new(
-            Some(TRACKBALL_DEVICE_ID),
+            Some(AML_TRIGGER_DEVICE_ID),
             3,
             embassy_time::Duration::from_secs(5),
-            1,
+            AML_TRIGGER_THRESHOLD,
         ))
         .unwrap();
     let positional_config = PositionalConfig::default();
@@ -228,6 +232,11 @@ async fn main(spawner: Spawner) {
     let pmw_sensor = Pmw3610::new(TRACKBALL_DEVICE_ID, pmw_spi, pmw_cs, pmw_motion, pmw_config);
     let mut trackball =
         TransformingPointingDevice::with_report_hz(TRACKBALL_DEVICE_ID, pmw_sensor, 125);
+    let mut smart_aml_trigger = SmartAutoMouseTrigger::new(
+        TRACKBALL_DEVICE_ID,
+        AML_TRIGGER_DEVICE_ID,
+        AML_TRIGGER_THRESHOLD as i16,
+    );
     let mut pointing_processor = PointingProcessor::new(
         &keymap,
         PointingProcessorConfig {
@@ -246,6 +255,7 @@ async fn main(spawner: Spawner) {
         run_all!(
             matrix,
             trackball,
+            smart_aml_trigger,
             pointing_processor,
             auto_mouse_layer,
             calibration_config,
