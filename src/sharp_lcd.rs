@@ -25,6 +25,10 @@ const HEIGHT: usize = 68;
 const FRAMEBUFFER_SIZE: usize = WIDTH_BYTES * HEIGHT;
 const WRITE_COMMAND: u8 = 0x01;
 const VCOM_BIT: u8 = 0x02;
+const CLEAR_COMMAND: u8 = 0x04;
+const SCS_SETUP: Duration = Duration::from_micros(6);
+const SCS_HOLD: Duration = Duration::from_micros(2);
+const SCS_LOW: Duration = Duration::from_micros(6);
 const VCOM_INTERVAL: Duration = Duration::from_millis(33);
 
 static LCD_BUS: StaticCell<Mutex<ThreadModeRawMutex, SharpBus>> = StaticCell::new();
@@ -49,8 +53,26 @@ impl SharpBus {
         if self.vcom_high { VCOM_BIT } else { 0 }
     }
 
-    async fn write_frame(&mut self, framebuffer: &[u8; FRAMEBUFFER_SIZE]) {
+    async fn begin_transaction(&mut self) {
+        Timer::after(SCS_LOW).await;
         self.cs.set_high();
+        Timer::after(SCS_SETUP).await;
+    }
+
+    async fn end_transaction(&mut self) {
+        Timer::after(SCS_HOLD).await;
+        self.cs.set_low();
+    }
+
+    async fn clear(&mut self) {
+        self.begin_transaction().await;
+        let command = [CLEAR_COMMAND, 0];
+        unwrap!(self.spi.write_from_ram(&command).await);
+        self.end_transaction().await;
+    }
+
+    async fn write_frame(&mut self, framebuffer: &[u8; FRAMEBUFFER_SIZE]) {
+        self.begin_transaction().await;
 
         let command = [WRITE_COMMAND | self.toggle_vcom()];
         unwrap!(self.spi.write_from_ram(&command).await);
@@ -65,14 +87,14 @@ impl SharpBus {
 
         let trailer = [0_u8];
         unwrap!(self.spi.write_from_ram(&trailer).await);
-        self.cs.set_low();
+        self.end_transaction().await;
     }
 
     async fn invert_vcom(&mut self) {
         let command = [self.toggle_vcom(), 0];
-        self.cs.set_high();
+        self.begin_transaction().await;
         unwrap!(self.spi.write_from_ram(&command).await);
-        self.cs.set_low();
+        self.end_transaction().await;
     }
 }
 
@@ -136,7 +158,9 @@ impl DrawTarget for SharpDisplay {
 }
 
 impl DisplayDriver for SharpDisplay {
-    async fn init(&mut self) {}
+    async fn init(&mut self) {
+        self.bus.lock().await.clear().await;
+    }
 
     async fn flush(&mut self) {
         if self.flushed_once && self.framebuffer == self.last_framebuffer {
