@@ -1,17 +1,23 @@
 use core::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 
 use embassy_time::Timer;
+use embedded_storage_async::nor_flash::NorFlash;
 use rmk::core_traits::Runnable;
 use rmk::host::KeyboardContext;
 use rmk_types::constants::MACRO_SPACE_SIZE;
 
 pub const CALIBRATION_BLOB_SIZE: usize = 28;
 pub const CALIBRATION_MACRO_OFFSET: usize = MACRO_SPACE_SIZE - CALIBRATION_BLOB_SIZE;
+pub const RMK_STORAGE_FLASH_START: u32 = 0xA0000;
+pub const RMK_STORAGE_FLASH_SIZE: u32 = 0x6000;
+pub const CALIBRATION_FLASH_START: u32 = 0xA6000;
+pub const CALIBRATION_FLASH_SIZE: u32 = 0x1000;
 
 const MAGIC: [u8; 4] = *b"RLC1";
 const FORMAT_VERSION: u8 = 1;
 const MAX_ABS_COEFFICIENT: i32 = 16_000;
 const MIN_ABS_DETERMINANT: i64 = 10_000;
+const CALIBRATION_SLOT_COUNT: usize = CALIBRATION_FLASH_SIZE as usize / CALIBRATION_BLOB_SIZE;
 
 const _: () = assert!(MACRO_SPACE_SIZE >= CALIBRATION_BLOB_SIZE);
 
@@ -120,16 +126,68 @@ fn encode_blob(matrix: MatrixCoefficients) -> [u8; CALIBRATION_BLOB_SIZE] {
     blob
 }
 
-pub struct CalibrationConfigWatcher<'a, 'keymap> {
-    context: &'a KeyboardContext<'keymap>,
-    last_applied: MatrixCoefficients,
+pub async fn recover_legacy_matrix<F: NorFlash>(flash: &mut F) -> Option<MatrixCoefficients> {
+    const READ_SIZE: usize = 256;
+    const OVERLAP: usize = CALIBRATION_BLOB_SIZE - 1;
+
+    let mut buffer = [0xff; READ_SIZE + OVERLAP];
+    let mut carry = 0;
+    let mut offset = 0;
+    let mut latest = None;
+
+    while offset < flash.capacity() {
+        let read_size = READ_SIZE.min(flash.capacity() - offset);
+        if flash
+            .read(offset as u32, &mut buffer[carry..carry + read_size])
+            .await
+            .is_err()
+        {
+            break;
+        }
+
+        let available = carry + read_size;
+        if available >= CALIBRATION_BLOB_SIZE {
+            for start in 0..=available - CALIBRATION_BLOB_SIZE {
+                if buffer[start..start + MAGIC.len()] == MAGIC {
+                    let mut blob = [0u8; CALIBRATION_BLOB_SIZE];
+                    blob.copy_from_slice(&buffer[start..start + CALIBRATION_BLOB_SIZE]);
+                    if let Some(matrix) = decode_blob(&blob) {
+                        latest = Some(matrix);
+                    }
+                }
+            }
+        }
+
+        carry = OVERLAP.min(available);
+        buffer.copy_within(available - carry..available, 0);
+        offset += read_size;
+    }
+
+    latest
 }
 
-impl<'a, 'keymap> CalibrationConfigWatcher<'a, 'keymap> {
-    pub fn new(context: &'a KeyboardContext<'keymap>) -> Self {
+pub struct CalibrationConfigWatcher<'a, 'keymap, F: NorFlash> {
+    context: &'a KeyboardContext<'keymap>,
+    flash: F,
+    migration_matrix: Option<MatrixCoefficients>,
+    last_applied: MatrixCoefficients,
+    last_persisted: Option<MatrixCoefficients>,
+    next_slot: usize,
+}
+
+impl<'a, 'keymap, F: NorFlash> CalibrationConfigWatcher<'a, 'keymap, F> {
+    pub fn with_migration(
+        context: &'a KeyboardContext<'keymap>,
+        flash: F,
+        migration_matrix: Option<MatrixCoefficients>,
+    ) -> Self {
         Self {
             context,
+            flash,
+            migration_matrix,
             last_applied: MatrixCoefficients::DEFAULT,
+            last_persisted: None,
+            next_slot: 0,
         }
     }
 
@@ -140,35 +198,99 @@ impl<'a, 'keymap> CalibrationConfigWatcher<'a, 'keymap> {
         blob
     }
 
+    async fn load_persistent_matrix(&mut self) -> Option<MatrixCoefficients> {
+        let mut latest = None;
+
+        for slot in 0..CALIBRATION_SLOT_COUNT {
+            let mut blob = [0u8; CALIBRATION_BLOB_SIZE];
+            if self
+                .flash
+                .read((slot * CALIBRATION_BLOB_SIZE) as u32, &mut blob)
+                .await
+                .is_err()
+            {
+                self.next_slot = slot;
+                return latest;
+            }
+
+            if blob.iter().all(|byte| *byte == 0xff) {
+                self.next_slot = slot;
+                return latest;
+            }
+
+            if let Some(matrix) = decode_blob(&blob) {
+                latest = Some(matrix);
+            }
+        }
+
+        self.next_slot = CALIBRATION_SLOT_COUNT;
+        latest
+    }
+
+    async fn persist_matrix(&mut self, matrix: MatrixCoefficients) -> bool {
+        if self.next_slot >= CALIBRATION_SLOT_COUNT {
+            if self.flash.erase(0, CALIBRATION_FLASH_SIZE).await.is_err() {
+                return false;
+            }
+            self.next_slot = 0;
+        }
+
+        let offset = (self.next_slot * CALIBRATION_BLOB_SIZE) as u32;
+        if self
+            .flash
+            .write(offset, &encode_blob(matrix))
+            .await
+            .is_err()
+        {
+            return false;
+        }
+
+        self.next_slot += 1;
+        true
+    }
+
     pub async fn initialize(&mut self) {
-        let blob = self.read_blob();
-        let matrix = if let Some(matrix) = decode_blob(&blob) {
-            matrix
-        } else {
-            let matrix = MatrixCoefficients::DEFAULT;
+        let persistent_matrix = self.load_persistent_matrix().await;
+        let macro_matrix = decode_blob(&self.read_blob());
+        let matrix = persistent_matrix
+            .or(self.migration_matrix)
+            .or(macro_matrix)
+            .unwrap_or(MatrixCoefficients::DEFAULT);
+
+        if macro_matrix != Some(matrix) {
             self.context
                 .write_macro_buffer(CALIBRATION_MACRO_OFFSET, &encode_blob(matrix))
                 .await;
-            matrix
-        };
+        }
+
+        if persistent_matrix.is_none() && self.persist_matrix(matrix).await {
+            self.last_persisted = Some(matrix);
+        } else {
+            self.last_persisted = persistent_matrix;
+        }
+
         apply_matrix(matrix);
         self.last_applied = matrix;
     }
 
-    fn refresh(&mut self) {
-        if let Some(matrix) = decode_blob(&self.read_blob())
-            && matrix != self.last_applied
-        {
-            apply_matrix(matrix);
-            self.last_applied = matrix;
+    async fn refresh(&mut self) {
+        if let Some(matrix) = decode_blob(&self.read_blob()) {
+            if matrix != self.last_applied {
+                apply_matrix(matrix);
+                self.last_applied = matrix;
+            }
+
+            if Some(matrix) != self.last_persisted && self.persist_matrix(matrix).await {
+                self.last_persisted = Some(matrix);
+            }
         }
     }
 }
 
-impl Runnable for CalibrationConfigWatcher<'_, '_> {
+impl<F: NorFlash> Runnable for CalibrationConfigWatcher<'_, '_, F> {
     async fn run(&mut self) -> ! {
         loop {
-            self.refresh();
+            self.refresh().await;
             Timer::after_millis(25).await;
         }
     }

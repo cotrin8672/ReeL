@@ -5,12 +5,15 @@ mod keymap;
 #[macro_use]
 mod macros;
 mod calibration_config;
+mod quick_mod_tap;
+mod smart_aml_trigger;
 mod trackball_transform;
 mod transformed_pointing_device;
 mod vial;
 
 use defmt::{info, unwrap};
 use defmt_rtt as _;
+use embassy_embedded_hal::flash::partition::Partition;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Flex, Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
@@ -18,6 +21,8 @@ use embassy_nrf::peripherals::{RNG, USBD};
 use embassy_nrf::usb::Driver;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::{bind_interrupts, rng, usb};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::mutex::Mutex;
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -36,6 +41,8 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
+use rmk::types::action::Action;
+use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::usb::UsbTransport;
 use rmk::watchdog::Nrf52Watchdog;
 use rmk::{
@@ -43,10 +50,15 @@ use rmk::{
 };
 use static_cell::StaticCell;
 
+use quick_mod_tap::QuickModTap;
+use smart_aml_trigger::SmartAutoMouseTrigger;
 use transformed_pointing_device::TransformingPointingDevice;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
-use calibration_config::CalibrationConfigWatcher;
+use calibration_config::{
+    CALIBRATION_FLASH_SIZE, CALIBRATION_FLASH_START, CalibrationConfigWatcher,
+    RMK_STORAGE_FLASH_SIZE, RMK_STORAGE_FLASH_START, recover_legacy_matrix,
+};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
@@ -67,6 +79,11 @@ const L2CAP_TXQ: u8 = 3;
 const L2CAP_RXQ: u8 = 3;
 const L2CAP_MTU: usize = 251;
 const TRACKBALL_DEVICE_ID: u8 = 0;
+const AML_TRIGGER_DEVICE_ID: u8 = 1;
+const AML_TRIGGER_THRESHOLD: u16 = 3;
+const NRF52840_FLASH_SIZE: u32 = 1024 * 1024;
+
+static SHARED_FLASH: StaticCell<Mutex<ThreadModeRawMutex, Flash<'static>>> = StaticCell::new();
 
 fn build_sdc<'d, const N: usize>(
     peripherals: nrf_sdc::Peripherals<'d>,
@@ -138,7 +155,19 @@ async fn main(spawner: Spawner) {
     let stack = build_ble_stack(sdc, ble_addr(), &mut host_resources).await;
 
     let usb_driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
-    let flash = Flash::take(mpsl, p.NVMC);
+    let shared_flash = SHARED_FLASH.init(Mutex::new(Flash::take(mpsl, p.NVMC)));
+    let storage_flash = Partition::new(shared_flash, 0, NRF52840_FLASH_SIZE);
+    let mut legacy_calibration_flash = Partition::new(
+        shared_flash,
+        RMK_STORAGE_FLASH_START,
+        RMK_STORAGE_FLASH_SIZE,
+    );
+    let migration_matrix = recover_legacy_matrix(&mut legacy_calibration_flash).await;
+    let calibration_flash = Partition::new(
+        shared_flash,
+        CALIBRATION_FLASH_START,
+        CALIBRATION_FLASH_SIZE,
+    );
 
     let (row_pins, col_pins) = config_matrix_pins_nrf!(
         peripherals: p,
@@ -149,6 +178,7 @@ async fn main(spawner: Spawner) {
     let storage_config = StorageConfig {
         start_addr: 0xA0000,
         num_sectors: 6,
+        clear_layout: false,
         ..Default::default()
     };
     let rmk_config = RmkConfig {
@@ -170,18 +200,30 @@ async fn main(spawner: Spawner) {
     );
     let mut behavior_config = BehaviorConfig::default();
     behavior_config
+        .morse
+        .morses
+        .push(
+            QuickModTap::new(
+                Action::Key(KeyCode::Hid(HidKeyCode::Backspace)),
+                Action::Modifier(rmk::types::modifier::ModifierCombination::RCTRL),
+                Action::Key(KeyCode::Hid(HidKeyCode::Backspace)),
+            )
+            .into_morse(),
+        )
+        .unwrap();
+    behavior_config
         .auto_mouse_layer
         .push(AutoMouseLayerConfig::new(
-            Some(TRACKBALL_DEVICE_ID),
+            Some(AML_TRIGGER_DEVICE_ID),
             3,
             embassy_time::Duration::from_secs(5),
-            1,
+            AML_TRIGGER_THRESHOLD,
         ))
         .unwrap();
     let positional_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
         &mut keymap_data,
-        flash,
+        storage_flash,
         &storage_config,
         &mut behavior_config,
         &positional_config,
@@ -192,7 +234,11 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 5, true, 0, 6>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
     let host_context = rmk::host::KeyboardContext::new(&keymap);
-    let mut calibration_config = CalibrationConfigWatcher::new(&host_context);
+    let mut calibration_config = CalibrationConfigWatcher::with_migration(
+        &host_context,
+        calibration_flash,
+        migration_matrix,
+    );
     calibration_config.initialize().await;
     let mut host_service = HostService::new(&host_context, &rmk_config);
 
@@ -209,6 +255,11 @@ async fn main(spawner: Spawner) {
     let pmw_sensor = Pmw3610::new(TRACKBALL_DEVICE_ID, pmw_spi, pmw_cs, pmw_motion, pmw_config);
     let mut trackball =
         TransformingPointingDevice::with_report_hz(TRACKBALL_DEVICE_ID, pmw_sensor, 125);
+    let mut smart_aml_trigger = SmartAutoMouseTrigger::new(
+        TRACKBALL_DEVICE_ID,
+        AML_TRIGGER_DEVICE_ID,
+        AML_TRIGGER_THRESHOLD as i16,
+    );
     let mut pointing_processor = PointingProcessor::new(
         &keymap,
         PointingProcessorConfig {
@@ -227,6 +278,7 @@ async fn main(spawner: Spawner) {
         run_all!(
             matrix,
             trackball,
+            smart_aml_trigger,
             pointing_processor,
             auto_mouse_layer,
             calibration_config,

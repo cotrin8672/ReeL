@@ -1,6 +1,6 @@
 use rmk::types::action::{EncoderAction, KeyAction};
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, encoder, k, lt, mt, shifted, wm};
+use rmk::{a, encoder, k, lt, mt, shifted, td, wm};
 
 pub const ROW: usize = 4;
 pub const COL: usize = 11;
@@ -21,7 +21,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [k!(T), k!(R), k!(E), k!(W), k!(Q), a!(No), k!(P), k!(O), k!(I), k!(U), k!(Y)],
             [k!(G), k!(F), k!(D), k!(S), k!(A), mt!(Semicolon, CTRL_SHIFT), k!(Semicolon), k!(L), k!(K), k!(J), k!(H)],
             [k!(B), k!(V), k!(C), k!(X), k!(Z), k!(Escape), k!(Slash), k!(Dot), k!(Comma), k!(M), k!(N)],
-            [k!(MouseBtn4), k!(MouseBtn5), mt!(Language2, ModifierCombination::LSHIFT), lt!(1, Space), mt!(Language1, ModifierCombination::LALT), a!(No), k!(Minus), k!(Tab), lt!(2, Enter), mt!(Backspace, ModifierCombination::RCTRL), a!(No)],
+            [k!(MouseBtn4), k!(MouseBtn5), mt!(Language2, ModifierCombination::LSHIFT), lt!(1, Space), mt!(Language1, ModifierCombination::LALT), a!(No), k!(Minus), k!(Tab), lt!(2, Enter), td!(0), a!(No)],
         ],
         [
             [k!(Kc5), k!(Kc4), k!(Kc3), k!(Kc2), k!(Kc1), a!(No), k!(Kc0), k!(Kc9), k!(Kc8), k!(Kc7), k!(Kc6)],
