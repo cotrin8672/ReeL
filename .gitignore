@@ -12,3 +12,6 @@ fp-info-cache
 # Local validation output
 /tmp/
 
+# Local JavaScript dependencies
+node_modules/
+
