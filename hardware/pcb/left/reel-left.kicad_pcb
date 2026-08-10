@@ -25909,7 +25909,7 @@
 			(at 0 33 180)
 			(unlocked yes)
 			(layer "F.SilkS")
-			(uuid "9d0dbcc3-2c40-4b22-9a2b-cc1e87d89009")
+			(uuid "03556b6a-cb06-49a3-9de2-042d7cdd9129")
 			(effects
 				(font
 					(size 1 1)
@@ -25922,7 +25922,7 @@
 			(unlocked yes)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "0225f662-9dbb-4255-bdf4-ddf4c479742f")
+			(uuid "ead9f0e0-4cbd-4954-af15-70061557c299")
 			(effects
 				(font
 					(size 1 1)
@@ -25935,7 +25935,7 @@
 			(unlocked yes)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "f91d46dc-9a38-446f-b34c-a468b36b79b1")
+			(uuid "491da38e-6131-43a6-b830-53dab14bcfc7")
 			(effects
 				(font
 					(size 1 1)
@@ -25948,7 +25948,7 @@
 			(unlocked yes)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "4c72b467-89ff-47a9-be8e-cf4c759eeb3d")
+			(uuid "2d364a80-c517-45b5-83a1-893d9e27b847")
 			(effects
 				(font
 					(size 1 1)
@@ -26029,10 +26029,10 @@
 			(layer "F.Fab")
 			(uuid "6d17fa73-ff0c-4a1b-855c-a070c829b8ab")
 		)
-		(fp_text user "GND"
-			(at 5.08 1.5 90)
+		(fp_text user "SI"
+			(at 5 1.25 90)
 			(layer "F.Fab")
-			(uuid "140452db-90c2-486d-96f3-6fd5bd029fbd")
+			(uuid "82d38f41-b35e-4e3c-8518-a59f84ef23e8")
 			(effects
 				(font
 					(size 0.55 0.55)
@@ -26040,10 +26040,10 @@
 				)
 			)
 		)
-		(fp_text user "VCC"
-			(at 2.54 1.5 90)
+		(fp_text user "SCK"
+			(at 2.5 1.5 90)
 			(layer "F.Fab")
-			(uuid "09c6088f-eee7-4239-a24c-30413fbfbe49")
+			(uuid "c2e02eed-28bd-4f0c-a951-c260e2a228df")
 			(effects
 				(font
 					(size 0.55 0.55)
@@ -26073,10 +26073,10 @@
 				)
 			)
 		)
-		(fp_text user "SI"
-			(at 0 1.25 90)
+		(fp_text user "VCC"
+			(at 0 1.5 90)
 			(layer "F.Fab")
-			(uuid "82d38f41-b35e-4e3c-8518-a59f84ef23e8")
+			(uuid "09c6088f-eee7-4239-a24c-30413fbfbe49")
 			(effects
 				(font
 					(size 0.55 0.55)
@@ -26084,10 +26084,10 @@
 				)
 			)
 		)
-		(fp_text user "SCK"
-			(at -2.54 1.5 90)
+		(fp_text user "GND"
+			(at -2.5 1.5 90)
 			(layer "F.Fab")
-			(uuid "c2e02eed-28bd-4f0c-a951-c260e2a228df")
+			(uuid "140452db-90c2-486d-96f3-6fd5bd029fbd")
 			(effects
 				(font
 					(size 0.55 0.55)
@@ -34103,14 +34103,6 @@
 		(layer "B.Cu")
 		(net "GND")
 		(uuid "bcde8ea7-f812-491c-b61a-e0411ee90762")
-	)
-	(segment
-		(start 201.015 106)
-		(end 201.015 105.985)
-		(width 0.5)
-		(layer "B.Cu")
-		(net "GND")
-		(uuid "e0984241-aa5f-439e-acb9-10408ff084c7")
 	)
 	(segment
 		(start 195 104)
