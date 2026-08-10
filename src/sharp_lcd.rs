@@ -1,22 +1,15 @@
 use core::convert::Infallible;
-use core::fmt::Write;
-
 use defmt::unwrap;
 use embassy_nrf::gpio::Output;
 use embassy_nrf::spim::Spim;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
-use embedded_graphics::mono_font::MonoTextStyle;
-use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_10X20};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
-use embedded_graphics::text::{Baseline, Text};
+use embedded_graphics::primitives::{Circle, PrimitiveStyle};
 use rmk::core_traits::Runnable;
 use rmk::display::{DisplayDriver, DisplayProcessor, DisplayRenderer, RenderContext};
-use rmk::heapless::String;
-use rmk::types::battery::BatteryStatus;
-use rmk::types::ble::BleState;
 use static_cell::StaticCell;
 
 const WIDTH: usize = 160;
@@ -186,95 +179,24 @@ impl Runnable for SharpVcomRunner {
     }
 }
 
-pub struct ReelStatusRenderer {
-    central: bool,
-}
+pub struct ReelStatusRenderer;
 
 impl ReelStatusRenderer {
-    fn new(central: bool) -> Self {
-        Self { central }
-    }
-}
-
-fn write_battery_level<const N: usize>(line: &mut String<N>, status: Option<BatteryStatus>) {
-    match status {
-        Some(BatteryStatus::Available {
-            level: Some(level), ..
-        }) => {
-            let _ = write!(line, "{level}%");
-        }
-        _ => {
-            let _ = line.push_str("--");
-        }
-    }
-}
-
-fn layer_name(layer: u8) -> &'static str {
-    match layer {
-        0 => "BASE",
-        1 => "NUM/SYM",
-        2 => "FN/NAV",
-        3 => "AML",
-        _ => "UNKNOWN",
+    fn new(_central: bool) -> Self {
+        Self
     }
 }
 
 impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
-    fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
+    fn render<D: DrawTarget<Color = BinaryColor>>(
+        &mut self,
+        _ctx: &RenderContext,
+        display: &mut D,
+    ) {
         let _ = display.clear(BinaryColor::Off);
-        let status_style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
-        let layer_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
-
-        let mut battery_line: String<32> = String::new();
-        if self.central {
-            let _ = battery_line.push_str("BAT R:");
-            write_battery_level(&mut battery_line, Some(ctx.battery.0));
-            let _ = battery_line.push_str(" L:");
-            write_battery_level(
-                &mut battery_line,
-                ctx.peripheral_batteries.first().map(|event| event.0),
-            );
-        } else {
-            let _ = battery_line.push_str("BAT L:");
-            write_battery_level(&mut battery_line, Some(ctx.battery.0));
-        }
-        let _ = Text::with_baseline(&battery_line, Point::new(0, 0), status_style, Baseline::Top)
-            .draw(display);
-
-        let ble_state = match ctx.ble_status.state {
-            BleState::Advertising => "ADV",
-            BleState::Connected => "CONNECTED",
-            BleState::Inactive => "OFF",
-        };
-        let mut ble_line: String<24> = String::new();
-        // Keep profile numbering consistent with vial.json (BT0, BT1, BT2).
-        let _ = write!(ble_line, "BT{} {ble_state}", ctx.ble_status.profile);
-        let _ = Text::with_baseline(&ble_line, Point::new(0, 11), status_style, Baseline::Top)
-            .draw(display);
-
-        let mut role_line: String<24> = String::new();
-        if self.central {
-            let connected = ctx.peripherals_connected.first().copied().unwrap_or(false);
-            let _ = write!(
-                role_line,
-                "CENTRAL  PER:{}",
-                if connected { "OK" } else { "--" }
-            );
-        } else {
-            let _ = write!(
-                role_line,
-                "PERIPHERAL  CEN:{}",
-                if ctx.central_connected { "OK" } else { "--" }
-            );
-        }
-        let _ = Text::with_baseline(&role_line, Point::new(0, 22), status_style, Baseline::Top)
-            .draw(display);
-
-        let mut layer_line: String<16> = String::new();
-        let _ = write!(layer_line, "L{} {}", ctx.layer, layer_name(ctx.layer));
-        let x = (WIDTH as i32 - layer_line.len() as i32 * 10) / 2;
-        let _ = Text::with_baseline(&layer_line, Point::new(x, 42), layer_style, Baseline::Top)
-            .draw(display);
+        let circle = Circle::new(Point::new(47, 1), 66)
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4));
+        let _ = circle.draw(display);
     }
 }
 
