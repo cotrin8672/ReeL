@@ -12,11 +12,19 @@ memory LCDs are intentionally outside the current RMK port.
 - BLE split with the right half at columns 6..10 and the left half at columns
   0..5
 - PMW3610 at 1200 CPI and 125 Hz on the right half
-- Calibrated fixed-point transform with retained per-axis remainder:
+- Calibrated fixed-point direction transform with input-length normalization and
+  retained per-axis remainder:
 
   ```text
-  output_x = -0.265 * raw_x + 1.142 * raw_y
-  output_y = -0.831 * raw_x + 0.562 * raw_y
+  transformed = M · raw
+  output = transformed · |raw| / |transformed|
+  ```
+
+  The default direction matrix is:
+
+  ```text
+  M = [-0.265,  1.142]
+      [-0.831,  0.562]
   ```
 
 - Auto Mouse Layer 3 with a five-second timeout

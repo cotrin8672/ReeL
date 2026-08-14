@@ -9,11 +9,6 @@
   },
   "customKeycodes": [
     {
-      "name": "BT0",
-      "title": "Bluetooth profile 0",
-      "shortName": "BT0"
-    },
-    {
       "name": "BT1",
       "title": "Bluetooth profile 1",
       "shortName": "BT1"
@@ -22,6 +17,21 @@
       "name": "BT2",
       "title": "Bluetooth profile 2",
       "shortName": "BT2"
+    },
+    {
+      "name": "BT3",
+      "title": "Bluetooth profile 3",
+      "shortName": "BT3"
+    },
+    {
+      "name": "BT4",
+      "title": "Bluetooth profile 4",
+      "shortName": "BT4"
+    },
+    {
+      "name": "BT5",
+      "title": "Bluetooth profile 5",
+      "shortName": "BT5"
     },
     {
       "name": "NEXT_BT",

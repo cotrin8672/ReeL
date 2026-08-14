@@ -2189,7 +2189,12 @@
 
     function previewCorrection() {
       if (previewMode === "raw" || !fittedBase || resultApplied) return [[1, 0], [0, 1]];
-      return scaleMatrix(fittedBase, Number(sensitivity.value) / 100);
+      return fittedBase;
+    }
+
+    function previewGain() {
+      if (previewMode === "raw" || !fittedBase || resultApplied) return 1;
+      return Number(sensitivity.value) / 100;
     }
 
     function updatePreviewCursor() {
@@ -2252,7 +2257,8 @@
       const dy = Number(event.movementY) || 0;
       if (dx === 0 && dy === 0) return;
 
-      const transformed = applyMatrix(previewCorrection(), dx, dy);
+      const transformed = applyLengthPreservingMatrix(previewCorrection(), dx, dy)
+        .map(value => value * previewGain());
       const bounds = previewPad.getBoundingClientRect();
       const margin = 11;
       previewX = Math.max(margin, Math.min(bounds.width - margin, previewX + transformed[0]));
@@ -2274,6 +2280,18 @@
         matrix[0][0] * x + matrix[0][1] * y,
         matrix[1][0] * x + matrix[1][1] * y
       ];
+    }
+
+    function applyLengthPreservingMatrix(matrix, x, y) {
+      const inputLength = Math.hypot(x, y);
+      if (inputLength < 1e-12) return [0, 0];
+
+      const transformed = applyMatrix(matrix, x, y);
+      const transformedLength = Math.hypot(transformed[0], transformed[1]);
+      if (transformedLength < 1e-12) return [0, 0];
+
+      const scale = inputLength / transformedLength;
+      return [transformed[0] * scale, transformed[1] * scale];
     }
 
     function multiplyMatrices(left, right) {
@@ -2533,19 +2551,82 @@
       const scale = 1000;
       const values = matrix.map(row => row.map(value => Math.round(value * scale)));
       return `pub const MATRIX_SCALE: i64 = ${scale};
+const LENGTH_SCALE: i64 = 64;
 pub const MATRIX_M00: i64 = ${values[0][0]};
 pub const MATRIX_M01: i64 = ${values[0][1]};
 pub const MATRIX_M10: i64 = ${values[1][0]};
 pub const MATRIX_M11: i64 = ${values[1][1]};
 
-let output_x_numerator =
+fn integer_sqrt(value: u64) -> u64 {
+    if value == 0 {
+        return 0;
+    }
+
+    let bit_count = 64 - value.leading_zeros();
+    let mut lower = 0;
+    let mut upper = 1u64 << ((bit_count + 1) / 2);
+    while lower + 1 < upper {
+        let middle = (lower + upper) / 2;
+        if middle <= value / middle {
+            lower = middle;
+        } else {
+            upper = middle;
+        }
+    }
+    lower
+}
+
+fn normalize_component(component: i64, raw_length_scaled: u64, transformed_length: u64) -> i64 {
+    let numerator = i128::from(component)
+        * i128::from(raw_length_scaled)
+        * i128::from(MATRIX_SCALE);
+    let denominator = i128::from(transformed_length) * i128::from(LENGTH_SCALE);
+    (numerator / denominator) as i64
+}
+
+let transformed_x_numerator =
     i64::from(raw_x) * MATRIX_M00
-    + i64::from(raw_y) * MATRIX_M01
-    + self.output_x_remainder;
-let output_y_numerator =
+    + i64::from(raw_y) * MATRIX_M01;
+let transformed_y_numerator =
     i64::from(raw_x) * MATRIX_M10
-    + i64::from(raw_y) * MATRIX_M11
-    + self.output_y_remainder;
+    + i64::from(raw_y) * MATRIX_M11;
+
+let raw_length_squared = {
+    let raw_x = i64::from(raw_x).unsigned_abs();
+    let raw_y = i64::from(raw_y).unsigned_abs();
+    raw_x * raw_x + raw_y * raw_y
+};
+let raw_length_scaled = integer_sqrt(
+    raw_length_squared * (LENGTH_SCALE as u64) * (LENGTH_SCALE as u64),
+);
+let transformed_length_squared = transformed_x_numerator
+    .unsigned_abs()
+    .saturating_mul(transformed_x_numerator.unsigned_abs())
+    .saturating_add(
+        transformed_y_numerator
+            .unsigned_abs()
+            .saturating_mul(transformed_y_numerator.unsigned_abs()),
+    );
+let transformed_length = integer_sqrt(transformed_length_squared);
+let (output_x_numerator, output_y_numerator) = if transformed_length == 0 {
+    (0, 0)
+} else {
+    (
+        normalize_component(
+            transformed_x_numerator,
+            raw_length_scaled,
+            transformed_length,
+        ),
+        normalize_component(
+            transformed_y_numerator,
+            raw_length_scaled,
+            transformed_length,
+        ),
+    )
+};
+
+let output_x_numerator = output_x_numerator + self.output_x_remainder;
+let output_y_numerator = output_y_numerator + self.output_y_remainder;
 
 let output_x = output_x_numerator / MATRIX_SCALE;
 let output_y = output_y_numerator / MATRIX_SCALE;
@@ -2821,6 +2902,7 @@ self.output_y_remainder =
       fitReliableCorrection,
       classifyInliers,
       matrixDriftDegrees,
+      applyLengthPreservingMatrix,
       fnv1a,
       encodeCalibrationBlob,
       decodeCalibrationBlob,
