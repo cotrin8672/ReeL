@@ -8,18 +8,15 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
+use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
 use rmk::core_traits::Runnable;
 use rmk::display::{DisplayDriver, DisplayProcessor, DisplayRenderer, RenderContext};
-use rmk::types::battery::BatteryStatus;
 use static_cell::StaticCell;
 
-const PANEL_WIDTH: usize = 160;
-const PANEL_WIDTH_BYTES: usize = PANEL_WIDTH / 8;
-const PANEL_HEIGHT: usize = 68;
-const FRAMEBUFFER_SIZE: usize = PANEL_WIDTH_BYTES * PANEL_HEIGHT;
-
-const LOGICAL_WIDTH: usize = 68;
-const LOGICAL_HEIGHT: usize = 160;
+const WIDTH: usize = 160;
+const WIDTH_BYTES: usize = WIDTH / 8;
+const HEIGHT: usize = 68;
+const FRAMEBUFFER_SIZE: usize = WIDTH_BYTES * HEIGHT;
 
 const WRITE_COMMAND: u8 = 0x01;
 const VCOM_BIT: u8 = 0x02;
@@ -64,7 +61,8 @@ impl SharpBus {
 
     async fn clear(&mut self) {
         self.begin_transaction().await;
-        unwrap!(self.spi.write_from_ram(&[CLEAR_COMMAND, 0]).await);
+        let command = [CLEAR_COMMAND, 0];
+        unwrap!(self.spi.write_from_ram(&command).await);
         self.end_transaction().await;
     }
 
@@ -74,15 +72,16 @@ impl SharpBus {
         let command = [WRITE_COMMAND | self.toggle_vcom()];
         unwrap!(self.spi.write_from_ram(&command).await);
 
-        let mut line = [0_u8; PANEL_WIDTH_BYTES + 2];
-        for y in 0..PANEL_HEIGHT {
+        let mut line = [0_u8; WIDTH_BYTES + 2];
+        for y in 0..HEIGHT {
             line[0] = (y + 1) as u8;
-            line[1..=PANEL_WIDTH_BYTES]
-                .copy_from_slice(&framebuffer[y * PANEL_WIDTH_BYTES..(y + 1) * PANEL_WIDTH_BYTES]);
+            line[1..=WIDTH_BYTES]
+                .copy_from_slice(&framebuffer[y * WIDTH_BYTES..(y + 1) * WIDTH_BYTES]);
             unwrap!(self.spi.write_from_ram(&line).await);
         }
 
-        unwrap!(self.spi.write_from_ram(&[0]).await);
+        let trailer = [0_u8];
+        unwrap!(self.spi.write_from_ram(&trailer).await);
         self.end_transaction().await;
     }
 
@@ -115,7 +114,7 @@ impl SharpDisplay {
 
 impl OriginDimensions for SharpDisplay {
     fn size(&self) -> Size {
-        Size::new(LOGICAL_WIDTH as u32, LOGICAL_HEIGHT as u32)
+        Size::new(WIDTH as u32, HEIGHT as u32)
     }
 }
 
@@ -128,19 +127,13 @@ impl DrawTarget for SharpDisplay {
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
         for Pixel(point, color) in pixels {
-            if point.x < 0
-                || point.y < 0
-                || point.x >= LOGICAL_WIDTH as i32
-                || point.y >= LOGICAL_HEIGHT as i32
-            {
+            if point.x < 0 || point.y < 0 || point.x >= WIDTH as i32 || point.y >= HEIGHT as i32 {
                 continue;
             }
 
-            // The physical 160x68 panel is mounted in portrait orientation.
-            let physical_x = point.y as usize;
-            let physical_y = LOGICAL_WIDTH - 1 - point.x as usize;
-            let index = physical_y * PANEL_WIDTH_BYTES + physical_x / 8;
-            let mask = 1 << (physical_x % 8);
+            let x = point.x as usize;
+            let index = point.y as usize * WIDTH_BYTES + x / 8;
+            let mask = 1 << (x % 8);
             match color {
                 BinaryColor::On => self.framebuffer[index] &= !mask,
                 BinaryColor::Off => self.framebuffer[index] |= mask,
@@ -150,10 +143,11 @@ impl DrawTarget for SharpDisplay {
     }
 
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
-        self.framebuffer.fill(match color {
+        let byte = match color {
             BinaryColor::On => 0x00,
             BinaryColor::Off => 0xff,
-        });
+        };
+        self.framebuffer.fill(byte);
         Ok(())
     }
 }
@@ -195,107 +189,25 @@ impl ReelStatusRenderer {
     }
 }
 
-fn draw_pixel<D>(display: &mut D, x: i32, y: i32)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    let _ = display.draw_iter(core::iter::once(Pixel(Point::new(x, y), BinaryColor::On)));
-}
-
-fn draw_rectangle<D>(display: &mut D, x0: i32, y0: i32, x1: i32, y1: i32, filled: bool)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    for y in y0..=y1 {
-        for x in x0..=x1 {
-            if filled || x == x0 || x == x1 || y == y0 || y == y1 {
-                draw_pixel(display, x, y);
-            }
-        }
-    }
-}
-
-fn battery_level(status: BatteryStatus) -> Option<u8> {
-    match status {
-        BatteryStatus::Available {
-            level: Some(level), ..
-        } => Some(level.min(100)),
-        _ => None,
-    }
-}
-
-fn glyph(character: u8) -> (&'static [u8; 8], i32) {
-    const DIGITS: [[u8; 8]; 10] = [
-        [0x1c, 0x36, 0x22, 0x22, 0x22, 0x22, 0x36, 0x1c],
-        [0x0c, 0x0a, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08],
-        [0x0c, 0x12, 0x10, 0x10, 0x08, 0x04, 0x02, 0x1f],
-        [0x0e, 0x11, 0x10, 0x0c, 0x10, 0x11, 0x11, 0x0e],
-        [0x10, 0x18, 0x14, 0x14, 0x12, 0x3f, 0x10, 0x10],
-        [0x1e, 0x01, 0x01, 0x0d, 0x13, 0x10, 0x11, 0x0e],
-        [0x1c, 0x24, 0x22, 0x1e, 0x22, 0x22, 0x22, 0x1c],
-        [0x1f, 0x10, 0x08, 0x08, 0x04, 0x04, 0x02, 0x02],
-        [0x1c, 0x22, 0x22, 0x1c, 0x22, 0x22, 0x22, 0x1c],
-        [0x1c, 0x22, 0x22, 0x22, 0x3c, 0x22, 0x12, 0x1c],
-    ];
-    const PERCENT: [u8; 8] = [0x0e, 0x2a, 0x2a, 0x1e, 0x30, 0x28, 0x24, 0x24];
-    const HYPHEN: [u8; 8] = [0, 0, 0, 0, 0x03, 0, 0, 0];
-
-    match character {
-        b'0'..=b'9' => (&DIGITS[(character - b'0') as usize], 6),
-        b'%' => (&PERCENT, 7),
-        _ => (&HYPHEN, 3),
-    }
-}
-
-fn draw_character<D>(display: &mut D, x: i32, y: i32, character: u8) -> i32
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    let (rows, advance) = glyph(character);
-    for (row, bits) in rows.iter().copied().enumerate() {
-        for column in 0..6 {
-            if bits & (1 << column) != 0 {
-                draw_pixel(display, x + column, y + row as i32);
-            }
-        }
-    }
-    advance
-}
-
-fn draw_battery<D>(display: &mut D, level: Option<u8>)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    draw_rectangle(display, 2, 4, 18, 12, false);
-    draw_rectangle(display, 19, 7, 20, 9, true);
-
-    if let Some(level) = level {
-        let fill_width = (13 * u16::from(level) + 50) / 100;
-        if fill_width > 0 {
-            draw_rectangle(display, 4, 6, 3 + i32::from(fill_width), 10, true);
-        }
-    }
-
-    let mut x = 24;
-    if let Some(level) = level {
-        if level == 100 {
-            x += draw_character(display, x, 4, b'1');
-            x += draw_character(display, x, 4, b'0');
-        } else if level >= 10 {
-            x += draw_character(display, x, 4, b'0' + level / 10);
-        }
-        x += draw_character(display, x, 4, b'0' + level % 10);
-    } else {
-        x += draw_character(display, x, 4, b'-');
-        x += draw_character(display, x, 4, b'-');
-    }
-    let _ = draw_character(display, x, 4, b'%');
-}
-
 impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
-    fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
+    fn render<D: DrawTarget<Color = BinaryColor>>(
+        &mut self,
+        _ctx: &RenderContext,
+        display: &mut D,
+    ) {
         let _ = display.clear(BinaryColor::Off);
-        draw_battery(display, battery_level(ctx.battery.0));
+
+        let outline = PrimitiveStyle::with_stroke(BinaryColor::On, 4);
+        let fill = PrimitiveStyle::with_fill(BinaryColor::On);
+        let _ = Rectangle::new(Point::new(34, 16), Size::new(80, 36))
+            .into_styled(outline)
+            .draw(display);
+        let _ = Rectangle::new(Point::new(114, 27), Size::new(10, 14))
+            .into_styled(fill)
+            .draw(display);
+        let _ = Rectangle::new(Point::new(42, 24), Size::new(32, 20))
+            .into_styled(fill)
+            .draw(display);
     }
 }
 
