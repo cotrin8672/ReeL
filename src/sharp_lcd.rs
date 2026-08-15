@@ -138,8 +138,8 @@ impl DrawTarget for SharpDisplay {
                 continue;
             }
 
-            let physical_x = point.y as usize;
-            let physical_y = LOGICAL_WIDTH - 1 - point.x as usize;
+            let physical_x = LOGICAL_HEIGHT - 1 - point.y as usize;
+            let physical_y = point.x as usize;
             let index = physical_y * WIDTH_BYTES + physical_x / 8;
             let mask = 1 << (physical_x % 8);
             match color {
