@@ -139,7 +139,7 @@ async fn main(spawner: Spawner) {
     lcd_spi_config.bit_order = spim::BitOrder::LsbFirst;
     let lcd_spi = spim::Spim::new_txonly(p.SPI3, Irqs, p.P1_00, p.P0_16, lcd_spi_config);
     let lcd_cs = Output::new(p.P1_10, Level::Low, OutputDrive::Standard);
-    let (mut lcd, mut lcd_vcom) = new_status_lcd(lcd_spi, lcd_cs, true).await;
+    let (mut lcd, mut lcd_vcom) = new_status_lcd(lcd_spi, lcd_cs, true);
 
     let mut battery_monitor =
         XiaoBatteryMonitor::new(p.P0_31.degrade_saadc(), p.SAADC, p.P0_14).await;
@@ -293,6 +293,7 @@ async fn main(spawner: Spawner) {
     let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config);
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
+    lcd.prime().await;
 
     join(
         run_all!(
