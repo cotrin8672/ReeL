@@ -293,7 +293,6 @@ async fn main(spawner: Spawner) {
     let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config);
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
-    lcd.prime().await;
 
     join(
         run_all!(

@@ -204,19 +204,16 @@ pub struct SharpFrameRunner {
     display: SharpDisplay,
 }
 
-impl SharpFrameRunner {
-    pub async fn prime(&mut self) {
+impl Runnable for SharpFrameRunner {
+    async fn run(&mut self) -> ! {
+        Timer::after(Duration::from_secs(1)).await;
         self.display.init().await;
         let _ = self.display.clear(BinaryColor::Off);
         draw_rectangle(&mut self.display, 34, 16, 113, 51, false);
         draw_rectangle(&mut self.display, 114, 27, 123, 40, true);
         draw_rectangle(&mut self.display, 42, 24, 73, 43, true);
         self.display.flush().await;
-    }
-}
 
-impl Runnable for SharpFrameRunner {
-    async fn run(&mut self) -> ! {
         loop {
             Timer::after(Duration::from_secs(3600)).await;
         }
