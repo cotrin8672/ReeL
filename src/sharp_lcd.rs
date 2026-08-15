@@ -8,7 +8,6 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{Circle, PrimitiveStyle};
 use rmk::core_traits::Runnable;
 use rmk::display::{DisplayDriver, DisplayProcessor, DisplayRenderer, RenderContext};
 use static_cell::StaticCell;
@@ -189,6 +188,26 @@ impl ReelStatusRenderer {
     }
 }
 
+fn draw_pixel<D>(display: &mut D, x: i32, y: i32)
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    let _ = display.draw_iter(core::iter::once(Pixel(Point::new(x, y), BinaryColor::On)));
+}
+
+fn draw_rectangle<D>(display: &mut D, x0: i32, y0: i32, x1: i32, y1: i32, filled: bool)
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            if filled || x == x0 || x == x1 || y == y0 || y == y1 {
+                draw_pixel(display, x, y);
+            }
+        }
+    }
+}
+
 impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(
         &mut self,
@@ -196,9 +215,9 @@ impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
         display: &mut D,
     ) {
         let _ = display.clear(BinaryColor::Off);
-        let circle = Circle::new(Point::new(47, 1), 66)
-            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4));
-        let _ = circle.draw(display);
+        draw_rectangle(display, 34, 16, 113, 51, false);
+        draw_rectangle(display, 114, 27, 123, 40, true);
+        draw_rectangle(display, 42, 24, 73, 43, true);
     }
 }
 
