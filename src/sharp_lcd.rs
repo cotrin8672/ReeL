@@ -9,7 +9,7 @@ use embassy_time::{Duration, Timer};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use rmk::core_traits::Runnable;
-use rmk::display::{DisplayDriver, DisplayProcessor, DisplayRenderer, RenderContext};
+use rmk::display::DisplayDriver;
 use static_cell::StaticCell;
 
 const WIDTH: usize = 160;
@@ -180,14 +180,6 @@ impl Runnable for SharpVcomRunner {
     }
 }
 
-pub struct ReelStatusRenderer;
-
-impl ReelStatusRenderer {
-    fn new(_central: bool) -> Self {
-        Self
-    }
-}
-
 fn draw_pixel<D>(display: &mut D, x: i32, y: i32)
 where
     D: DrawTarget<Color = BinaryColor>,
@@ -208,30 +200,31 @@ where
     }
 }
 
-impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
-    fn render<D: DrawTarget<Color = BinaryColor>>(
-        &mut self,
-        _ctx: &RenderContext,
-        display: &mut D,
-    ) {
-        let _ = display.clear(BinaryColor::Off);
-        draw_rectangle(display, 34, 16, 113, 51, false);
-        draw_rectangle(display, 114, 27, 123, 40, true);
-        draw_rectangle(display, 42, 24, 73, 43, true);
+pub struct SharpFrameRunner {
+    display: SharpDisplay,
+}
+
+impl Runnable for SharpFrameRunner {
+    async fn run(&mut self) -> ! {
+        self.display.init().await;
+        let _ = self.display.clear(BinaryColor::Off);
+        draw_rectangle(&mut self.display, 34, 16, 113, 51, false);
+        draw_rectangle(&mut self.display, 114, 27, 123, 40, true);
+        draw_rectangle(&mut self.display, 42, 24, 73, 43, true);
+        self.display.flush().await;
+
+        loop {
+            Timer::after(Duration::from_secs(3600)).await;
+        }
     }
 }
 
 pub fn new_status_lcd(
     spi: Spim<'static>,
     cs: Output<'static>,
-    central: bool,
-) -> (
-    DisplayProcessor<SharpDisplay, ReelStatusRenderer>,
-    SharpVcomRunner,
-) {
+    _central: bool,
+) -> (SharpFrameRunner, SharpVcomRunner) {
     let bus = LCD_BUS.init(Mutex::new(SharpBus::new(spi, cs)));
     let display = SharpDisplay::new(bus);
-    let processor = DisplayProcessor::with_renderer(display, ReelStatusRenderer::new(central))
-        .with_min_render_interval(VCOM_INTERVAL);
-    (processor, SharpVcomRunner { bus })
+    (SharpFrameRunner { display }, SharpVcomRunner { bus })
 }
