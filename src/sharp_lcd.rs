@@ -8,7 +8,7 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
+use embedded_graphics::primitives::{Circle, PrimitiveStyle};
 use rmk::core_traits::Runnable;
 use rmk::display::{DisplayDriver, DisplayProcessor, DisplayRenderer, RenderContext};
 use static_cell::StaticCell;
@@ -196,18 +196,9 @@ impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
         display: &mut D,
     ) {
         let _ = display.clear(BinaryColor::Off);
-
-        let outline = PrimitiveStyle::with_stroke(BinaryColor::On, 4);
-        let fill = PrimitiveStyle::with_fill(BinaryColor::On);
-        let _ = Rectangle::new(Point::new(34, 16), Size::new(80, 36))
-            .into_styled(outline)
-            .draw(display);
-        let _ = Rectangle::new(Point::new(114, 27), Size::new(10, 14))
-            .into_styled(fill)
-            .draw(display);
-        let _ = Rectangle::new(Point::new(42, 24), Size::new(32, 20))
-            .into_styled(fill)
-            .draw(display);
+        let circle = Circle::new(Point::new(47, 1), 66)
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4));
+        let _ = circle.draw(display);
     }
 }
 
