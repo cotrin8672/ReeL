@@ -201,30 +201,33 @@ where
 }
 
 pub struct SharpFrameRunner {
-    display: SharpDisplay,
+    _display: SharpDisplay,
 }
 
 impl Runnable for SharpFrameRunner {
     async fn run(&mut self) -> ! {
-        self.display.init().await;
-        let _ = self.display.clear(BinaryColor::Off);
-        draw_rectangle(&mut self.display, 34, 16, 113, 51, false);
-        draw_rectangle(&mut self.display, 114, 27, 123, 40, true);
-        draw_rectangle(&mut self.display, 42, 24, 73, 43, true);
-        self.display.flush().await;
-
         loop {
             Timer::after(Duration::from_secs(3600)).await;
         }
     }
 }
 
-pub fn new_status_lcd(
+pub async fn new_status_lcd(
     spi: Spim<'static>,
     cs: Output<'static>,
     _central: bool,
 ) -> (SharpFrameRunner, SharpVcomRunner) {
     let bus = LCD_BUS.init(Mutex::new(SharpBus::new(spi, cs)));
-    let display = SharpDisplay::new(bus);
-    (SharpFrameRunner { display }, SharpVcomRunner { bus })
+    let mut display = SharpDisplay::new(bus);
+    display.init().await;
+    let _ = display.clear(BinaryColor::Off);
+    draw_rectangle(&mut display, 34, 16, 113, 51, false);
+    draw_rectangle(&mut display, 114, 27, 123, 40, true);
+    draw_rectangle(&mut display, 42, 24, 73, 43, true);
+    display.flush().await;
+
+    (
+        SharpFrameRunner { _display: display },
+        SharpVcomRunner { bus },
+    )
 }
