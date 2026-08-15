@@ -156,7 +156,6 @@ async fn main(spawner: Spawner) {
     // BM4.0A01: 9 pulses/revolution; emit once per two valid phase transitions.
     let mut encoder = RotaryEncoder::with_resolution(encoder_a, encoder_b, 2, true, 0);
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
-    lcd.prime().await;
 
     join(
         run_all!(

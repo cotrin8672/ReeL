@@ -1,6 +1,5 @@
 use core::future::pending;
 
-use defmt::{error, info};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal_async::digital::Wait;
 use rmk::event::{Axis, AxisEvent, AxisValType, PointingEvent};
@@ -46,17 +45,6 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         }
     }
 
-    pub async fn initialize(&mut self) -> bool {
-        loop {
-            if self.try_init().await {
-                return true;
-            }
-            if self.init_state == InitState::Failed {
-                return false;
-            }
-        }
-    }
-
     async fn try_init(&mut self) -> bool {
         match self.init_state {
             InitState::Ready => return true,
@@ -70,17 +58,10 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         if let InitState::Initializing(retry_count) = self.init_state {
             match self.sensor.init().await {
                 Ok(()) => {
-                    info!("Pointing device {} initialized", self.id);
                     self.init_state = InitState::Ready;
                     return true;
                 }
-                Err(err) => {
-                    error!(
-                        "Pointing device {} initialization attempt {} failed: {:?}",
-                        self.id,
-                        retry_count + 1,
-                        err
-                    );
+                Err(_) => {
                     if retry_count + 1 >= Self::MAX_INIT_RETRIES {
                         self.init_state = InitState::Failed;
                         return false;
