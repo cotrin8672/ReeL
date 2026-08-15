@@ -275,6 +275,8 @@ async fn main(spawner: Spawner) {
     let pmw_sensor = Pmw3610::new(TRACKBALL_DEVICE_ID, pmw_spi, pmw_cs, pmw_motion, pmw_config);
     let mut trackball =
         TransformingPointingDevice::with_report_hz(TRACKBALL_DEVICE_ID, pmw_sensor, 125);
+    trackball.initialize().await;
+    lcd.prime().await;
     let mut smart_aml_trigger = SmartAutoMouseTrigger::new(
         TRACKBALL_DEVICE_ID,
         AML_TRIGGER_DEVICE_ID,
