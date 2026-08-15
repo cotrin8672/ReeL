@@ -20,9 +20,6 @@ const FRAMEBUFFER_SIZE: usize = PANEL_WIDTH_BYTES * PANEL_HEIGHT;
 
 const LOGICAL_WIDTH: usize = 68;
 const LOGICAL_HEIGHT: usize = 160;
-const BASE_ROW_BYTES: usize = LOGICAL_WIDTH.div_ceil(8);
-const BASE_UI: &[u8; BASE_ROW_BYTES * LOGICAL_HEIGHT] =
-    include_bytes!("lcd_status_base_68x160.raw");
 
 const WRITE_COMMAND: u8 = 0x01;
 const VCOM_BIT: u8 = 0x02;
@@ -190,13 +187,11 @@ impl Runnable for SharpVcomRunner {
     }
 }
 
-pub struct ReelStatusRenderer {
-    central: bool,
-}
+pub struct ReelStatusRenderer;
 
 impl ReelStatusRenderer {
-    fn new(central: bool) -> Self {
-        Self { central }
+    fn new(_central: bool) -> Self {
+        Self
     }
 }
 
@@ -215,19 +210,6 @@ where
         for x in x0..=x1 {
             if filled || x == x0 || x == x1 || y == y0 || y == y1 {
                 draw_pixel(display, x, y);
-            }
-        }
-    }
-}
-
-fn draw_base<D>(display: &mut D)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    for y in 0..LOGICAL_HEIGHT {
-        for x in 0..LOGICAL_WIDTH {
-            if BASE_UI[y * BASE_ROW_BYTES + x / 8] & (1 << (x % 8)) != 0 {
-                draw_pixel(display, x as i32, y as i32);
             }
         }
     }
@@ -284,6 +266,9 @@ fn draw_battery<D>(display: &mut D, level: Option<u8>)
 where
     D: DrawTarget<Color = BinaryColor>,
 {
+    draw_rectangle(display, 2, 4, 18, 12, false);
+    draw_rectangle(display, 19, 7, 20, 9, true);
+
     if let Some(level) = level {
         let fill_width = (13 * u16::from(level) + 50) / 100;
         if fill_width > 0 {
@@ -307,57 +292,10 @@ where
     let _ = draw_character(display, x, 4, b'%');
 }
 
-fn draw_split_connection<D>(display: &mut D, connected: bool)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    for (x0, y0, x1, y1) in [(52, 9, 55, 12), (57, 6, 60, 12), (62, 3, 65, 12)] {
-        draw_rectangle(display, x0, y0, x1, y1, connected);
-    }
-}
-
-fn draw_active_layer<D>(display: &mut D, layer: u8)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    let y = 65 + i32::from(layer.min(3)) * 13;
-    for (x, dy) in [(4, 0), (5, 1), (6, 1), (7, 2), (6, 3), (5, 3), (4, 4)] {
-        draw_pixel(display, x, y + dy);
-    }
-}
-
-fn draw_profiles<D>(display: &mut D, active_profile: u8)
-where
-    D: DrawTarget<Color = BinaryColor>,
-{
-    let active_profile = active_profile.min(4);
-    for profile in 0..5 {
-        let x = 23 + profile * 8;
-        draw_rectangle(
-            display,
-            x,
-            148,
-            x + 4,
-            152,
-            profile == i32::from(active_profile),
-        );
-    }
-}
-
 impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
         let _ = display.clear(BinaryColor::Off);
-        draw_base(display);
-
         draw_battery(display, battery_level(ctx.battery.0));
-        let split_connected = if self.central {
-            ctx.peripherals_connected.first().copied().unwrap_or(false)
-        } else {
-            ctx.central_connected
-        };
-        draw_split_connection(display, split_connected);
-        draw_active_layer(display, ctx.layer);
-        draw_profiles(display, ctx.ble_status.profile);
     }
 }
 
