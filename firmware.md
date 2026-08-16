@@ -1,4 +1,4 @@
-# ReeL RMK firmware
+# ReeL firmware
 
 This branch carries the RMK port for the two Seeed XIAO nRF52840 controllers.
 The right half is the BLE/USB central and contains the PMW3610 trackball. The
@@ -31,6 +31,23 @@ memory LCDs are intentionally outside the current RMK port.
 - Mouse buttons 1/2 on the J/K positions while the mouse layer is active
 - Left encoder mapped to vertical scrolling on every layer
 - BLE/USB Vial support with flash-backed keymap storage
+
+## Vial layout source
+
+`vial.json` is regenerated from the left and right KiCad PCB matrix netlists
+and switch positions. The generator follows each switch's `ColN` net to its
+diode and then follows that diode to `RowN`; the right half is offset to
+unified matrix columns 6..10. It uses the PCB positions to preserve the
+mirrored row and thumb-key order in Vial.
+Run it from the repository root after a matrix or PCB change:
+
+```powershell
+python tools/generate_vial_json.py
+```
+
+The script fails on ambiguous matrix wiring or an unsupported physical
+arrangement, so a new or removed switch cannot silently disappear from Vial.
+Use `--check` to verify that the checked-in JSON is current without writing it.
 
 ## Browser trackball calibration
 
@@ -73,7 +90,7 @@ cargo hex-to-uf2 --input-path reel_left.hex --output-path reel_left.uf2 --family
 1. Put each XIAO into its UF2 bootloader by double-tapping reset.
 2. Flash `reel_left.uf2` to the left controller.
 3. Flash `reel_right.uf2` to the right controller.
-4. Power both halves on and pair the host with `ReeL RMK`.
+4. Power both halves on and pair the host with `ReeL`.
 
 RMK uses its own BLE split bonding and storage format. Flash both halves from
 the same build when the split protocol changes. The first on-device validation
