@@ -21,10 +21,13 @@ use panic_probe as _;
 use rmk::HostResources;
 use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::embassy_futures::select::select;
+use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::BatteryProcessor;
-use rmk::input_device::rotary_encoder::RotaryEncoder;
+use rmk::input_device::rotary_encoder::{Direction, Phase, ResolutionPhase};
 use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
@@ -81,6 +84,68 @@ fn ble_addr() -> [u8; 6] {
     let addr = high << 32 | u64::from(ficr.deviceid(0).read());
     let addr = addr | 0x0000_c000_0000_0000;
     unwrap!(addr.to_le_bytes()[..6].try_into())
+}
+
+/// Rotary encoder reader for the left half.
+///
+/// RMK's stock encoder emits a release event from a separate read and waits
+/// 5 ms before listening for another edge. That dead time can drop the next
+/// quadrature transition on this mechanical encoder. Keep the same RMK phase
+/// decoder, but publish the press/release pair immediately so every edge can
+/// be sampled.
+struct LeftRotaryEncoder {
+    pin_a: Input<'static>,
+    pin_b: Input<'static>,
+    state: u8,
+    phase: ResolutionPhase,
+}
+
+impl LeftRotaryEncoder {
+    fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
+        let mut state = 0;
+        if pin_a.is_low() {
+            state |= 0b01;
+        }
+        if pin_b.is_low() {
+            state |= 0b10;
+        }
+
+        Self {
+            pin_a,
+            pin_b,
+            state,
+            // BM4.0A01: 9 pulses/revolution and 18 detents, so one detent
+            // corresponds to two valid quadrature transitions.
+            phase: ResolutionPhase::new(1, true),
+        }
+    }
+
+    fn update(&mut self) -> Direction {
+        let mut state = self.state & 0b11;
+        if self.pin_a.is_low() {
+            state |= 0b0100;
+        }
+        if self.pin_b.is_low() {
+            state |= 0b1000;
+        }
+        self.state = state >> 2;
+        self.phase.direction(state)
+    }
+}
+
+impl Runnable for LeftRotaryEncoder {
+    async fn run(&mut self) -> ! {
+        loop {
+            let (pin_a, pin_b) = (&mut self.pin_a, &mut self.pin_b);
+            select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
+
+            let direction = self.update();
+            if direction != Direction::None {
+                publish_event_async(KeyboardEvent::rotary_encoder(0, direction, true)).await;
+                publish_event_async(KeyboardEvent::rotary_encoder(0, direction, false)).await;
+            }
+        }
+    }
 }
 
 #[embassy_executor::main]
@@ -153,8 +218,7 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
     let encoder_a = Input::new(p.P1_14, Pull::Up);
     let encoder_b = Input::new(p.P1_15, Pull::Up);
-    // Emit one event per valid phase transition.
-    let mut encoder = RotaryEncoder::with_resolution(encoder_a, encoder_b, 1, true, 0);
+    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
     join(

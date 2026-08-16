@@ -272,7 +272,7 @@ async fn main(spawner: Spawner) {
     let pmw_motion = Some(Input::new(p.P1_14, Pull::Up));
     let pmw_spi = BitBangSpiBus::new(pmw_sck, pmw_sdio);
     let pmw_config = Pmw3610Config {
-        res_cpi: 1200,
+        res_cpi: 800,
         smart_mode: true,
         ..Default::default()
     };
