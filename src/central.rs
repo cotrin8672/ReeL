@@ -206,7 +206,7 @@ async fn main(spawner: Spawner) {
             vid: 0x4C4B,
             pid: 0x524D,
             manufacturer: "cotrin8672",
-            product_name: "ReeL RMK",
+            product_name: "ReeL",
             serial_number: "vial:5265654c:000001",
         },
         vial_config: VialConfig::new(&VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (0, 1)]),

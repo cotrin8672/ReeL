@@ -2,8 +2,8 @@ use embassy_time::{Duration, Instant};
 use rmk::{
     core_traits::Runnable,
     event::{
-        publish_event, Axis, AxisEvent, AxisValType, EventSubscriber, PointingEvent,
-        SubscribableEvent,
+        Axis, AxisEvent, AxisValType, EventSubscriber, PointingEvent, SubscribableEvent,
+        publish_event,
     },
 };
 
@@ -27,10 +27,7 @@ impl MotionAccumulator {
         self.x = self.x.saturating_add(x);
         self.y = self.y.saturating_add(y);
 
-        self.x
-            .unsigned_abs()
-            .saturating_add(self.y.unsigned_abs())
-            >= CUMULATIVE_MOTION_THRESHOLD
+        self.x.unsigned_abs().saturating_add(self.y.unsigned_abs()) >= CUMULATIVE_MOTION_THRESHOLD
     }
 }
 
