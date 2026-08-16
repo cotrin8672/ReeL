@@ -7,8 +7,11 @@ use rmk::{
     },
 };
 
-const IMMEDIATE_MOTION_THRESHOLD: i32 = 4;
-const CUMULATIVE_MOTION_THRESHOLD: u32 = 6;
+// The trackball must move this far before the mouse layer is entered.  Keep
+// this as the single tuning point for the user-visible entry threshold.
+const MINIMUM_ENTRY_MOVEMENT: u32 = 12;
+const IMMEDIATE_MOTION_THRESHOLD: i32 = MINIMUM_ENTRY_MOVEMENT as i32;
+const CUMULATIVE_MOTION_THRESHOLD: u32 = MINIMUM_ENTRY_MOVEMENT;
 const ACCUMULATION_WINDOW: Duration = Duration::from_millis(100);
 
 #[derive(Default)]
@@ -146,7 +149,7 @@ mod tests {
     fn slow_consistent_motion_eventually_triggers() {
         let mut motion = MotionAccumulator::default();
 
-        for _ in 0..5 {
+        for _ in 0..11 {
             assert!(!motion.add(1, 0));
         }
         assert!(motion.add(1, 0));

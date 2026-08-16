@@ -1297,11 +1297,11 @@
   <main class="shell">
     <section class="hero">
       <div>
-        <p class="eyebrow">PMW3610 · 2-axis calibration</p>
+        <p class="eyebrow">PMW3610 · 8-direction calibration</p>
         <h1>感覚を、変換行列に。</h1>
         <p class="hero-copy">
-          左右・上下へ往復するだけ。難しい斜め入力は計算に使いません。
-          ブラウザがHIDの相対移動を計測し、反対方向を同じ軸としてまとめて補正します。
+          表示された8方向へトラックボールを順番に転がすだけ。
+          ブラウザがHIDの相対移動を計測し、軸の傾き・反転・感度差をまとめて補正します。
         </p>
       </div>
       <ol class="workflow">
@@ -1314,7 +1314,7 @@
     <section class="workspace">
       <article class="card">
         <div class="card-head">
-          <h2 class="card-title">上下左右プロファイル</h2>
+          <h2 class="card-title">8方向プロファイル</h2>
           <div class="capture-head-actions">
             <button id="traceToggle" class="trace-toggle" type="button" aria-pressed="false">
               入力矢印 OFF
@@ -1335,7 +1335,7 @@
                   stroke="#ef6a53" stroke-width="5" stroke-linecap="round"
                   marker-end="url(#coralArrow)" opacity="0"></line>
           </svg>
-          <div id="directionArrow" class="direction-arrow" aria-hidden="true">→</div>
+          <div id="directionArrow" class="direction-arrow" aria-hidden="true">↑</div>
           <button id="startButton" class="primary" type="button">プロファイルを開始</button>
           <div id="stageMessage" class="stage-message">
             クリック後、矢印方向へ<strong>一度スーッと転がして止める</strong>だけです
@@ -1346,7 +1346,7 @@
       <aside class="card session">
         <div class="card-head">
           <h2 class="card-title">セッション設定</h2>
-          <span id="progressText" class="capture-mode">0回 · 1/10周</span>
+          <span id="progressText" class="capture-mode">0 / 8</span>
         </div>
         <div class="session-body">
           <section>
@@ -1382,19 +1382,21 @@
           <section>
             <div class="section-label">
               <span>計測する方向</span>
-              <span id="roundLabel">自動判定</span>
+              <span id="roundLabel">5 rounds</span>
             </div>
             <div id="directionList" class="direction-list" aria-label="計測進捗"></div>
           </section>
 
           <section>
             <div class="section-label">
-              <span>停止条件</span>
-              <span>上下左右 / 周</span>
+              <span>繰り返し精度</span>
+              <span>8方向 / 周</span>
             </div>
-            <div id="samplingPlan" class="round-select" role="status">
-              最低3周から自動判定 · 最大10周（40ストローク）
-            </div>
+            <select id="rounds" class="round-select" aria-label="8方向計測の繰り返し回数">
+              <option value="1">1周 — クイック（8ストローク）</option>
+              <option value="3">3周 — 標準（24ストローク）</option>
+              <option value="5" selected>5周 — 精密（40ストローク）</option>
+            </select>
           </section>
 
           <section>
@@ -1416,7 +1418,7 @@
     <section id="results" class="card results" aria-live="polite">
       <div class="card-head">
         <h2 class="card-title">プロファイル結果</h2>
-        <span class="capture-mode">paired-axis robust fit</span>
+        <span class="capture-mode">direction-only robust fit</span>
       </div>
       <div class="result-grid">
         <div class="diagnostic">
@@ -1426,7 +1428,7 @@
           </div>
           <div class="plot">
             <svg id="resultPlot" viewBox="-180 -180 360 360" role="img"
-                 aria-label="補正前後の上下左右比較"></svg>
+                 aria-label="補正前後の8方向比較"></svg>
           </div>
           <div class="legend">
             <span class="before">補正前</span>
@@ -1450,7 +1452,7 @@
 
         <div class="outputs">
           <div class="result-summary">
-            <strong id="resultSummary">上下左右の往復から補正値を推定しました</strong>
+            <strong id="resultSummary">8方向から補正値を推定しました</strong>
             <span id="confidence" class="confidence">GOOD FIT</span>
           </div>
 
@@ -1546,7 +1548,7 @@
       <div class="note">
         <span class="note-num">02</span>
         <strong>転がす距離は厳密でなくてOK</strong>
-        <p>外れ値を除いた各方向の有効サンプル数と推定の安定性を毎周判定し、十分なら自動で終了します。</p>
+        <p>距離ではなく方向をフィットし、5周分をロバスト推定するため、ストローク長や手のブレの影響を抑えられます。</p>
       </div>
       <div class="note">
         <span class="note-num">03</span>
@@ -1562,10 +1564,14 @@
     "use strict";
 
     const directions = [
+      { label: "上", symbol: "↑", x: 0, y: -1 },
+      { label: "右上", symbol: "↗", x: Math.SQRT1_2, y: -Math.SQRT1_2 },
       { label: "右", symbol: "→", x: 1, y: 0 },
-      { label: "左", symbol: "←", x: -1, y: 0 },
+      { label: "右下", symbol: "↘", x: Math.SQRT1_2, y: Math.SQRT1_2 },
       { label: "下", symbol: "↓", x: 0, y: 1 },
-      { label: "上", symbol: "↑", x: 0, y: -1 }
+      { label: "左下", symbol: "↙", x: -Math.SQRT1_2, y: Math.SQRT1_2 },
+      { label: "左", symbol: "←", x: -1, y: 0 },
+      { label: "左上", symbol: "↖", x: -Math.SQRT1_2, y: -Math.SQRT1_2 }
     ];
 
     const stage = document.getElementById("stage");
@@ -1576,6 +1582,7 @@
     const directionList = document.getElementById("directionList");
     const progressText = document.getElementById("progressText");
     const roundLabel = document.getElementById("roundLabel");
+    const roundsSelect = document.getElementById("rounds");
     const observedVector = document.getElementById("observedVector");
     const traceToggle = document.getElementById("traceToggle");
     const captureMode = document.getElementById("captureMode");
@@ -1605,14 +1612,9 @@
     let currentIndex = 0;
     let sumX = 0;
     let sumY = 0;
-    let pathLength = 0;
     let idleTimer = 0;
+    let cooldownTimer = 0;
     let fittedBase = null;
-    let resultSamples = [];
-    let previousRoundFit = null;
-    let stableRoundCount = 0;
-    let gestureAttempts = 0;
-    let stoppedAtLimit = false;
     let copyPayloads = {};
     let showObservedVector = false;
     let previewActive = false;
@@ -1627,14 +1629,6 @@
     let autoApplyTimer = 0;
     let lastReplacement = null;
     let resultApplied = false;
-
-    const MIN_ROUNDS = 3;
-    const MAX_ROUNDS = 10;
-    const MAX_GESTURE_ATTEMPTS = 60;
-    const MIN_INLIERS_PER_DIRECTION = 3;
-    const TARGET_RMS_DEGREES = 6;
-    const MAX_FIT_DRIFT_DEGREES = 1.5;
-    const REQUIRED_STABLE_ROUNDS = 2;
 
     const REEL_VENDOR_ID = 0x4c4b;
     const REEL_PRODUCT_ID = 0x524d;
@@ -1915,10 +1909,18 @@
       }
     }
 
+    function requestedRounds() {
+      return Number(roundsSelect.value);
+    }
+
+    function requestedSamples() {
+      return requestedRounds() * directions.length;
+    }
+
     function renderDirectionList() {
       directionList.replaceChildren();
       const completedInRound = samples.length % directions.length;
-      const allComplete = phase === "complete";
+      const allComplete = samples.length >= requestedSamples();
       const activeDirection = currentIndex % directions.length;
       directions.forEach((direction, index) => {
         const chip = document.createElement("div");
@@ -1930,12 +1932,11 @@
         if (active && index === activeDirection) chip.classList.add("active");
         directionList.append(chip);
       });
-      const completedRounds = Math.floor(samples.length / directions.length);
       const visibleRound = allComplete
-        ? Math.max(1, Math.ceil(samples.length / directions.length))
-        : Math.min(MAX_ROUNDS, completedRounds + 1);
-      progressText.textContent = `${samples.length}回 · ${visibleRound}/${MAX_ROUNDS}周`;
-      roundLabel.textContent = `自動 · 最大${MAX_ROUNDS}周`;
+        ? requestedRounds()
+        : Math.min(requestedRounds(), Math.floor(samples.length / directions.length) + 1);
+      progressText.textContent = `${samples.length} / ${requestedSamples()} · ${visibleRound}周目`;
+      roundLabel.textContent = `${requestedRounds()} rounds`;
     }
 
     function setObservedVector(x, y) {
@@ -1961,6 +1962,7 @@
         currentIndex = 0;
       }
 
+      roundsSelect.disabled = true;
       startButton.hidden = true;
       stage.classList.remove("stage-idle");
       renderDirectionList();
@@ -1974,6 +1976,7 @@
           captureMode.textContent = "Pointer Lock / 標準入力";
         } catch (fallbackError) {
           active = false;
+          roundsSelect.disabled = false;
           startButton.hidden = false;
           startButton.textContent = "もう一度試す";
           stage.classList.add("stage-idle");
@@ -1983,19 +1986,24 @@
     }
 
     function prepareDirection(roundSummary = "") {
+      clearTimeout(cooldownTimer);
       clearTimeout(idleTimer);
       sumX = 0;
       sumY = 0;
-      pathLength = 0;
       setObservedVector(0, 0);
 
       const direction = directions[currentIndex % directions.length];
       directionArrow.textContent = direction.symbol;
-      phase = "waiting";
-      setPrompt(roundSummary
-        ? `${roundSummary}<br>次は <strong>${direction.label} ${direction.symbol}</strong>。そのまま転がせます`
-        : `<strong>${direction.label} ${direction.symbol}</strong> へ一度転がして、止めてください`);
+      phase = "cooldown";
+      setPrompt(roundSummary ||
+        `次は <strong>${direction.label} ${direction.symbol}</strong>。手を止めて少し待ってください`);
       renderDirectionList();
+
+      cooldownTimer = window.setTimeout(() => {
+        if (!active || document.pointerLockElement !== stage) return;
+        phase = "waiting";
+        setPrompt(`<strong>${direction.label} ${direction.symbol}</strong> へ一度転がして、止めてください`);
+      }, roundSummary ? 1200 : 650);
     }
 
     function handleMovement(event) {
@@ -2009,7 +2017,6 @@
       phase = "measuring";
       sumX += dx;
       sumY += dy;
-      pathLength += Math.hypot(dx, dy);
       setObservedVector(sumX, sumY);
       setPrompt(`<strong>計測中…</strong> そのまま止めると自動で確定します`);
 
@@ -2020,34 +2027,13 @@
     function finishGesture() {
       if (!active || phase !== "measuring") return;
       const distance = Math.hypot(sumX, sumY);
-      const straightness = distance / Math.max(pathLength, distance);
-      gestureAttempts += 1;
 
-      if (distance < 40) {
+      if (distance < 18) {
         phase = "waiting";
         sumX = 0;
         sumY = 0;
-        pathLength = 0;
         setObservedVector(0, 0);
-        if (gestureAttempts >= MAX_GESTURE_ATTEMPTS) {
-          completeSession(null, `${MAX_GESTURE_ATTEMPTS}試行の上限に達しました`);
-          return;
-        }
         setPrompt(`<strong>動きが小さすぎました。</strong> ${directions[currentIndex % directions.length].symbol} へもう少し大きく転がしてください`);
-        return;
-      }
-
-      if (straightness < 0.82) {
-        phase = "waiting";
-        sumX = 0;
-        sumY = 0;
-        pathLength = 0;
-        setObservedVector(0, 0);
-        if (gestureAttempts >= MAX_GESTURE_ATTEMPTS) {
-          completeSession(null, `${MAX_GESTURE_ATTEMPTS}試行の上限に達しました`);
-          return;
-        }
-        setPrompt(`<strong>途中で曲がりすぎました。</strong> ${directions[currentIndex % directions.length].symbol} へ力を抜いて、もう一度まっすぐ転がしてください`);
         return;
       }
 
@@ -2059,83 +2045,42 @@
         tx: target.x,
         ty: target.y,
         label: target.label,
-        directionIndex,
-        straightness
+        directionIndex
       });
 
       currentIndex += 1;
       renderDirectionList();
 
-      if (gestureAttempts >= MAX_GESTURE_ATTEMPTS) {
-        completeSession(null, `${MAX_GESTURE_ATTEMPTS}試行の上限に達しました`);
-        return;
-      }
-
-      let roundSummary = "";
-      if (currentIndex % directions.length === 0) {
-        let assessment;
-        try {
-          assessment = assessCompletedRound();
-        } catch (error) {
-          previousRoundFit = null;
-          stableRoundCount = 0;
+      if (currentIndex >= requestedSamples()) {
+        completeSession();
+      } else {
+        let roundSummary = "";
+        if (currentIndex % directions.length === 0) {
+          fittedBase = fitCorrection(samples);
+          const provisionalError = rmsAngle(fittedBase);
           const completedRound = currentIndex / directions.length;
-          if (completedRound >= MAX_ROUNDS) {
-            completeSession(null, `${MAX_ROUNDS}周の上限に達しました`);
-            return;
-          }
-          prepareDirection(
-            `<strong>${completedRound}周目は軸が不安定でした。</strong> 有効サンプルを追加します`
-          );
-          return;
+          roundSummary = `<strong>${completedRound}周目を反映。</strong> 暫定RMS誤差 ${provisionalError.toFixed(1)}° → 次の周へ`;
         }
-        fittedBase = assessment.matrix;
-        const completedRound = currentIndex / directions.length;
-        const excludedText = assessment.excluded > 0
-          ? ` · 外れ値${assessment.excluded}回を除外`
-          : "";
-
-        if (assessment.converged) {
-          completeSession(assessment);
-          return;
-        }
-        if (completedRound >= MAX_ROUNDS) {
-          completeSession(assessment, `${MAX_ROUNDS}周の上限に達しました`);
-          return;
-        }
-
-        const stateText = assessment.enoughInliers && assessment.precise
-          ? `安定性を確認中 ${stableRoundCount}/${REQUIRED_STABLE_ROUNDS}`
-          : "有効サンプルを追加";
-        roundSummary =
-          `<strong>${completedRound}周目を判定。</strong> 採用${assessment.inliers.length}/${samples.length}回` +
-          `${excludedText} · RMS ${assessment.rms.toFixed(1)}° · ${stateText}`;
+        prepareDirection(roundSummary);
       }
-      prepareDirection(roundSummary);
     }
 
-    function completeSession(assessment = null, limitReason = "") {
+    function completeSession() {
       active = false;
       phase = "complete";
       resultApplied = false;
-      stoppedAtLimit = Boolean(limitReason);
       sensitivity.disabled = false;
       applyMatrixButton.disabled = !hidDevice?.opened;
+      roundsSelect.disabled = false;
       clearTimeout(idleTimer);
+      clearTimeout(cooldownTimer);
+      setPrompt("<strong>計測完了。</strong> 下に補正行列を生成しました");
       directionArrow.textContent = "✓";
       renderDirectionList();
       if (document.pointerLockElement === stage) document.exitPointerLock();
 
       try {
-        const finalAssessment = assessment || fitReliableCorrection(samples);
-        fittedBase = finalAssessment.matrix;
-        resultSamples = finalAssessment.inliers;
-        const excludedText = finalAssessment.excluded > 0
-          ? `（外れ値${finalAssessment.excluded}回を除外）`
-          : "";
-        setPrompt(limitReason
-          ? `<strong>${limitReason}。</strong> 現時点の結果を生成しました${excludedText}。自動反映はしていません`
-          : `<strong>必要な信頼度に到達しました。</strong> 下に補正行列を生成しました${excludedText}`);
+        fittedBase = fitCorrection(samples);
         renderResults();
         results.classList.add("visible");
         window.setTimeout(() => {
@@ -2147,7 +2092,7 @@
         fittedBase = null;
         startButton.hidden = false;
         startButton.textContent = "計測をやり直す";
-        setPrompt(`<strong>2本の軸を安定して求められませんでした。</strong> 上下左右をもう一度計測してください`);
+        setPrompt(`<strong>行列を安定して求められませんでした。</strong> 8方向をもう一度計測してください`);
       }
     }
 
@@ -2156,11 +2101,6 @@
       phase = "idle";
       resultApplied = false;
       lastReplacement = null;
-      resultSamples = [];
-      previousRoundFit = null;
-      stableRoundCount = 0;
-      gestureAttempts = 0;
-      stoppedAtLimit = false;
       sensitivity.disabled = false;
       applyMatrixButton.disabled = !hidDevice?.opened;
       window.clearTimeout(autoApplyTimer);
@@ -2168,16 +2108,17 @@
       currentIndex = 0;
       sumX = 0;
       sumY = 0;
-      pathLength = 0;
       fittedBase = null;
+      roundsSelect.disabled = false;
       clearTimeout(idleTimer);
+      clearTimeout(cooldownTimer);
       if (document.pointerLockElement === stage) document.exitPointerLock();
       if (document.pointerLockElement === previewPad) document.exitPointerLock();
       previewActive = false;
       previewStart.hidden = false;
       previewStart.textContent = "操作感プレビューを開始";
 
-      directionArrow.textContent = "→";
+      directionArrow.textContent = "↑";
       startButton.hidden = false;
       startButton.textContent = "プロファイルを開始";
       stage.classList.add("stage-idle");
@@ -2189,12 +2130,7 @@
 
     function previewCorrection() {
       if (previewMode === "raw" || !fittedBase || resultApplied) return [[1, 0], [0, 1]];
-      return fittedBase;
-    }
-
-    function previewGain() {
-      if (previewMode === "raw" || !fittedBase || resultApplied) return 1;
-      return Number(sensitivity.value) / 100;
+      return scaleMatrix(fittedBase, Number(sensitivity.value) / 100);
     }
 
     function updatePreviewCursor() {
@@ -2257,8 +2193,7 @@
       const dy = Number(event.movementY) || 0;
       if (dx === 0 && dy === 0) return;
 
-      const transformed = applyLengthPreservingMatrix(previewCorrection(), dx, dy)
-        .map(value => value * previewGain());
+      const transformed = applyMatrix(previewCorrection(), dx, dy);
       const bounds = previewPad.getBoundingClientRect();
       const margin = 11;
       previewX = Math.max(margin, Math.min(bounds.width - margin, previewX + transformed[0]));
@@ -2275,23 +2210,70 @@
       placePreviewTarget();
     }
 
+    function smallestEigenvector(matrix) {
+      const a = matrix.map(row => row.slice());
+      const v = [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+      ];
+
+      for (let iteration = 0; iteration < 80; iteration += 1) {
+        let p = 0;
+        let q = 1;
+        let maximum = Math.abs(a[p][q]);
+        for (let row = 0; row < 4; row += 1) {
+          for (let column = row + 1; column < 4; column += 1) {
+            const value = Math.abs(a[row][column]);
+            if (value > maximum) {
+              maximum = value;
+              p = row;
+              q = column;
+            }
+          }
+        }
+        if (maximum < 1e-12) break;
+
+        const angle = 0.5 * Math.atan2(2 * a[p][q], a[q][q] - a[p][p]);
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+
+        for (let k = 0; k < 4; k += 1) {
+          if (k === p || k === q) continue;
+          const akp = a[k][p];
+          const akq = a[k][q];
+          a[k][p] = a[p][k] = cosine * akp - sine * akq;
+          a[k][q] = a[q][k] = sine * akp + cosine * akq;
+        }
+
+        const app = a[p][p];
+        const aqq = a[q][q];
+        const apq = a[p][q];
+        a[p][p] = cosine * cosine * app - 2 * sine * cosine * apq + sine * sine * aqq;
+        a[q][q] = sine * sine * app + 2 * sine * cosine * apq + cosine * cosine * aqq;
+        a[p][q] = a[q][p] = 0;
+
+        for (let k = 0; k < 4; k += 1) {
+          const vkp = v[k][p];
+          const vkq = v[k][q];
+          v[k][p] = cosine * vkp - sine * vkq;
+          v[k][q] = sine * vkp + cosine * vkq;
+        }
+      }
+
+      let smallest = 0;
+      for (let index = 1; index < 4; index += 1) {
+        if (a[index][index] < a[smallest][smallest]) smallest = index;
+      }
+      return v.map(row => row[smallest]);
+    }
+
     function applyMatrix(matrix, x, y) {
       return [
         matrix[0][0] * x + matrix[0][1] * y,
         matrix[1][0] * x + matrix[1][1] * y
       ];
-    }
-
-    function applyLengthPreservingMatrix(matrix, x, y) {
-      const inputLength = Math.hypot(x, y);
-      if (inputLength < 1e-12) return [0, 0];
-
-      const transformed = applyMatrix(matrix, x, y);
-      const transformedLength = Math.hypot(transformed[0], transformed[1]);
-      if (transformedLength < 1e-12) return [0, 0];
-
-      const scale = inputLength / transformedLength;
-      return [transformed[0] * scale, transformed[1] * scale];
     }
 
     function multiplyMatrices(left, right) {
@@ -2319,186 +2301,57 @@
       return Math.acos(cosine);
     }
 
-    function robustAxis(inputSamples, axis) {
-      const aligned = inputSamples
-        .filter(sample => axis === "x" ? Math.abs(sample.tx) > 0.5 : Math.abs(sample.ty) > 0.5)
-        .map(sample => {
-          const length = Math.hypot(sample.dx, sample.dy);
-          if (length < 1e-9) return null;
-          const sign = axis === "x" ? Math.sign(sample.tx) : Math.sign(sample.ty);
-          return {
-            x: sample.dx / length * sign,
-            y: sample.dy / length * sign,
-            quality: Math.max(0.25, Math.min(1, sample.straightness ?? 1))
-          };
-        })
-        .filter(Boolean);
-
-      if (aligned.length < 2) throw new Error(`Not enough ${axis}-axis samples`);
-
-      let x = aligned.reduce((sum, sample) => sum + sample.x, 0);
-      let y = aligned.reduce((sum, sample) => sum + sample.y, 0);
-      let length = Math.hypot(x, y);
-      if (length < 1e-9) throw new Error(`Unstable ${axis}-axis samples`);
-      x /= length;
-      y /= length;
-
-      const huber = 8 * Math.PI / 180;
-      for (let pass = 0; pass < 8; pass += 1) {
-        let weightedX = 0;
-        let weightedY = 0;
-        let totalWeight = 0;
-        aligned.forEach(sample => {
-          const cosine = Math.max(-1, Math.min(1, x * sample.x + y * sample.y));
-          const error = Math.acos(cosine);
-          const robustWeight = error <= huber ? 1 : huber / error;
-          const weight = sample.quality * robustWeight;
-          weightedX += sample.x * weight;
-          weightedY += sample.y * weight;
-          totalWeight += weight;
-        });
-        length = Math.hypot(weightedX, weightedY);
-        if (totalWeight < 1e-9 || length < 1e-9) {
-          throw new Error(`Unstable ${axis}-axis fit`);
-        }
-        x = weightedX / length;
-        y = weightedY / length;
-      }
-
-      return [x, y];
-    }
-
     function fitCorrection(inputSamples) {
-      const horizontal = robustAxis(inputSamples, "x");
-      const vertical = robustAxis(inputSamples, "y");
-      const basisDeterminant =
-        horizontal[0] * vertical[1] - horizontal[1] * vertical[0];
+      let weights = inputSamples.map(() => 1);
+      let fitted = null;
 
-      if (Math.abs(basisDeterminant) < 0.25) {
-        throw new Error("Measured axes are too close together");
+      for (let robustPass = 0; robustPass < 6; robustPass += 1) {
+        const normal = Array.from({ length: 4 }, () => [0, 0, 0, 0]);
+
+        inputSamples.forEach((sample, index) => {
+          const length = Math.hypot(sample.dx, sample.dy);
+          if (length < 1e-9) return;
+          const x = sample.dx / length;
+          const y = sample.dy / length;
+          const row = [
+            -sample.ty * x,
+            -sample.ty * y,
+            sample.tx * x,
+            sample.tx * y
+          ];
+          const weight = weights[index];
+          for (let r = 0; r < 4; r += 1) {
+            for (let c = 0; c < 4; c += 1) {
+              normal[r][c] += weight * row[r] * row[c];
+            }
+          }
+        });
+
+        const vector = smallestEigenvector(normal);
+        fitted = [
+          [vector[0], vector[1]],
+          [vector[2], vector[3]]
+        ];
+
+        const orientation = inputSamples.reduce((total, sample) => {
+          const [x, y] = applyMatrix(fitted, sample.dx, sample.dy);
+          const length = Math.hypot(x, y) || 1;
+          return total + (x * sample.tx + y * sample.ty) / length;
+        }, 0);
+        if (orientation < 0) fitted = scaleMatrix(fitted, -1);
+
+        const determinant = fitted[0][0] * fitted[1][1] - fitted[0][1] * fitted[1][0];
+        if (Math.abs(determinant) < 1e-8) throw new Error("Degenerate profile");
+        fitted = scaleMatrix(fitted, 1 / Math.sqrt(Math.abs(determinant)));
+
+        const huber = 10 * Math.PI / 180;
+        weights = inputSamples.map(sample => {
+          const error = angleError(fitted, sample);
+          return error <= huber ? 1 : huber / error;
+        });
       }
 
-      let fitted = [
-        [vertical[1] / basisDeterminant, -vertical[0] / basisDeterminant],
-        [-horizontal[1] / basisDeterminant, horizontal[0] / basisDeterminant]
-      ];
-
-      const determinant =
-        fitted[0][0] * fitted[1][1] - fitted[0][1] * fitted[1][0];
-      fitted = scaleMatrix(fitted, 1 / Math.sqrt(Math.abs(determinant)));
       return fitted;
-    }
-
-    function median(values) {
-      if (!values.length) return Infinity;
-      const sorted = values.slice().sort((a, b) => a - b);
-      const middle = Math.floor(sorted.length / 2);
-      return sorted.length % 2
-        ? sorted[middle]
-        : (sorted[middle - 1] + sorted[middle]) / 2;
-    }
-
-    function classifyInliers(inputSamples, matrix) {
-      const errors = inputSamples.map(sample => angleError(matrix, sample) * 180 / Math.PI);
-      const center = median(errors);
-      const mad = median(errors.map(error => Math.abs(error - center)));
-      const threshold = Math.max(
-        5,
-        Math.min(15, center + Math.max(2, 3 * 1.4826 * mad))
-      );
-      const inliers = inputSamples.filter((sample, index) => errors[index] <= threshold);
-      return { inliers, errors, threshold };
-    }
-
-    function fitReliableCorrection(inputSamples) {
-      if (inputSamples.length < directions.length) {
-        throw new Error("Not enough samples");
-      }
-
-      let matrix = fitCorrection(inputSamples);
-      let inliers = inputSamples.slice();
-      let previousSignature = "";
-
-      for (let pass = 0; pass < 3; pass += 1) {
-        const classified = classifyInliers(inputSamples, matrix);
-        const horizontalCount = classified.inliers.filter(sample => Math.abs(sample.tx) > 0.5).length;
-        const verticalCount = classified.inliers.filter(sample => Math.abs(sample.ty) > 0.5).length;
-        if (horizontalCount < 2 || verticalCount < 2) break;
-
-        const signature = classified.inliers
-          .map(sample => inputSamples.indexOf(sample))
-          .join(",");
-        inliers = classified.inliers;
-        matrix = fitCorrection(inliers);
-        if (signature === previousSignature) break;
-        previousSignature = signature;
-      }
-
-      const finalClassified = classifyInliers(inputSamples, matrix);
-      const finalHorizontalCount =
-        finalClassified.inliers.filter(sample => Math.abs(sample.tx) > 0.5).length;
-      const finalVerticalCount =
-        finalClassified.inliers.filter(sample => Math.abs(sample.ty) > 0.5).length;
-      if (finalHorizontalCount >= 2 && finalVerticalCount >= 2) {
-        inliers = finalClassified.inliers;
-        matrix = fitCorrection(inliers);
-      }
-
-      return {
-        matrix,
-        inliers,
-        excluded: inputSamples.length - inliers.length,
-        threshold: finalClassified.threshold,
-        rms: rmsAngle(matrix, inliers)
-      };
-    }
-
-    function matrixDriftDegrees(previous, current, inputSamples) {
-      if (!previous || !inputSamples.length) return Infinity;
-      const changes = inputSamples.map(sample => {
-        const before = applyMatrix(previous, sample.dx, sample.dy);
-        const after = applyMatrix(current, sample.dx, sample.dy);
-        const denominator = Math.hypot(...before) * Math.hypot(...after);
-        if (denominator < 1e-9) return 180;
-        const cosine = Math.max(
-          -1,
-          Math.min(1, (before[0] * after[0] + before[1] * after[1]) / denominator)
-        );
-        return Math.acos(cosine) * 180 / Math.PI;
-      });
-      return median(changes);
-    }
-
-    function assessCompletedRound() {
-      const assessment = fitReliableCorrection(samples);
-      const completedRounds = samples.length / directions.length;
-      const directionCounts = directions.map((direction, index) =>
-        assessment.inliers.filter(sample => sample.directionIndex === index).length
-      );
-      const drift = matrixDriftDegrees(previousRoundFit, assessment.matrix, assessment.inliers);
-      const enoughInliers =
-        completedRounds >= MIN_ROUNDS
-        && directionCounts.every(count => count >= MIN_INLIERS_PER_DIRECTION);
-      const precise = assessment.rms <= TARGET_RMS_DEGREES;
-      const stable = drift <= MAX_FIT_DRIFT_DEGREES;
-
-      if (enoughInliers && precise && stable) {
-        stableRoundCount += 1;
-      } else {
-        stableRoundCount = 0;
-      }
-      previousRoundFit = assessment.matrix.map(row => row.slice());
-
-      return {
-        ...assessment,
-        completedRounds,
-        directionCounts,
-        drift,
-        enoughInliers,
-        precise,
-        stable,
-        converged: stableRoundCount >= REQUIRED_STABLE_ROUNDS
-      };
     }
 
     function currentFirmwareMatrix() {
@@ -2510,9 +2363,8 @@
       return [[values[0], values[1]], [values[2], values[3]]];
     }
 
-    function rmsAngle(matrix, inputSamples = samples) {
-      if (!inputSamples.length) return Infinity;
-      const radians = inputSamples.map(sample => angleError(matrix, sample));
+    function rmsAngle(matrix) {
+      const radians = samples.map(sample => angleError(matrix, sample));
       return Math.sqrt(radians.reduce((sum, value) => sum + value * value, 0) / radians.length) * 180 / Math.PI;
     }
 
@@ -2551,82 +2403,19 @@
       const scale = 1000;
       const values = matrix.map(row => row.map(value => Math.round(value * scale)));
       return `pub const MATRIX_SCALE: i64 = ${scale};
-const LENGTH_SCALE: i64 = 64;
 pub const MATRIX_M00: i64 = ${values[0][0]};
 pub const MATRIX_M01: i64 = ${values[0][1]};
 pub const MATRIX_M10: i64 = ${values[1][0]};
 pub const MATRIX_M11: i64 = ${values[1][1]};
 
-fn integer_sqrt(value: u64) -> u64 {
-    if value == 0 {
-        return 0;
-    }
-
-    let bit_count = 64 - value.leading_zeros();
-    let mut lower = 0;
-    let mut upper = 1u64 << ((bit_count + 1) / 2);
-    while lower + 1 < upper {
-        let middle = (lower + upper) / 2;
-        if middle <= value / middle {
-            lower = middle;
-        } else {
-            upper = middle;
-        }
-    }
-    lower
-}
-
-fn normalize_component(component: i64, raw_length_scaled: u64, transformed_length: u64) -> i64 {
-    let numerator = i128::from(component)
-        * i128::from(raw_length_scaled)
-        * i128::from(MATRIX_SCALE);
-    let denominator = i128::from(transformed_length) * i128::from(LENGTH_SCALE);
-    (numerator / denominator) as i64
-}
-
-let transformed_x_numerator =
+let output_x_numerator =
     i64::from(raw_x) * MATRIX_M00
-    + i64::from(raw_y) * MATRIX_M01;
-let transformed_y_numerator =
+    + i64::from(raw_y) * MATRIX_M01
+    + self.output_x_remainder;
+let output_y_numerator =
     i64::from(raw_x) * MATRIX_M10
-    + i64::from(raw_y) * MATRIX_M11;
-
-let raw_length_squared = {
-    let raw_x = i64::from(raw_x).unsigned_abs();
-    let raw_y = i64::from(raw_y).unsigned_abs();
-    raw_x * raw_x + raw_y * raw_y
-};
-let raw_length_scaled = integer_sqrt(
-    raw_length_squared * (LENGTH_SCALE as u64) * (LENGTH_SCALE as u64),
-);
-let transformed_length_squared = transformed_x_numerator
-    .unsigned_abs()
-    .saturating_mul(transformed_x_numerator.unsigned_abs())
-    .saturating_add(
-        transformed_y_numerator
-            .unsigned_abs()
-            .saturating_mul(transformed_y_numerator.unsigned_abs()),
-    );
-let transformed_length = integer_sqrt(transformed_length_squared);
-let (output_x_numerator, output_y_numerator) = if transformed_length == 0 {
-    (0, 0)
-} else {
-    (
-        normalize_component(
-            transformed_x_numerator,
-            raw_length_scaled,
-            transformed_length,
-        ),
-        normalize_component(
-            transformed_y_numerator,
-            raw_length_scaled,
-            transformed_length,
-        ),
-    )
-};
-
-let output_x_numerator = output_x_numerator + self.output_x_remainder;
-let output_y_numerator = output_y_numerator + self.output_y_remainder;
+    + i64::from(raw_y) * MATRIX_M11
+    + self.output_y_remainder;
 
 let output_x = output_x_numerator / MATRIX_SCALE;
 let output_y = output_y_numerator / MATRIX_SCALE;
@@ -2640,7 +2429,6 @@ self.output_y_remainder =
     function plotResults(correction) {
       const plot = document.getElementById("resultPlot");
       const radius = 132;
-      const plottedSamples = resultSamples.length ? resultSamples : samples;
       const background = directions.map(direction => {
         const x = direction.x * radius;
         const y = direction.y * radius;
@@ -2650,7 +2438,7 @@ self.output_y_remainder =
       }).join("");
 
       const vectors = directions.map((direction, index) => {
-        const group = plottedSamples.filter(sample => sample.directionIndex === index);
+        const group = samples.filter(sample => sample.directionIndex === index);
         const average = group.reduce((total, sample) => {
           const length = Math.hypot(sample.dx, sample.dy) || 1;
           total[0] += sample.dx / length;
@@ -2704,9 +2492,8 @@ self.output_y_remainder =
       const correction = scaleMatrix(fittedBase, gain);
       const replacement = multiplyMatrices(correction, firmware);
       const identity = [[1, 0], [0, 1]];
-      const evaluatedSamples = resultSamples.length ? resultSamples : samples;
-      const before = rmsAngle(identity, evaluatedSamples);
-      const after = rmsAngle(correction, evaluatedSamples);
+      const before = rmsAngle(identity);
+      const after = rmsAngle(correction);
       const rotation = closestRotation(fittedBase);
 
       renderMatrix("correctionMatrix", correction);
@@ -2719,14 +2506,10 @@ self.output_y_remainder =
 
       const confidence = document.getElementById("confidence");
       const resultSummary = document.getElementById("resultSummary");
-      if (stoppedAtLimit) {
-        confidence.textContent = "CHECK";
-        confidence.style.background = "#c47b22";
-        resultSummary.textContent = "上限まで計測しました。プレビューで結果を確認してください";
-      } else if (after <= 4) {
+      if (after <= 4) {
         confidence.textContent = "HIGH FIT";
         confidence.style.background = "#007f7b";
-        resultSummary.textContent = "左右・上下の2軸がきれいに揃いました";
+        resultSummary.textContent = "8方向がきれいに揃いました";
       } else if (after <= 8) {
         confidence.textContent = "GOOD FIT";
         confidence.style.background = "#4f7f3d";
@@ -2740,9 +2523,6 @@ self.output_y_remainder =
         confidence.style.background = "#c84f3d";
         resultSummary.textContent = "計測のばらつきが大きいため、再計測を推奨します";
       }
-      if (resultSamples.length && resultSamples.length < samples.length) {
-        resultSummary.textContent += `（${samples.length}回中${resultSamples.length}回を採用）`;
-      }
 
       const code = buildCode(replacement);
       document.getElementById("codeOutput").textContent = code;
@@ -2753,11 +2533,7 @@ self.output_y_remainder =
         replacement: matrixText(replacement),
         code
       };
-      if (stoppedAtLimit) {
-        window.clearTimeout(autoApplyTimer);
-      } else {
-        scheduleAutoApply(replacement);
-      }
+      scheduleAutoApply(replacement);
     }
 
     async function copyText(text) {
@@ -2856,6 +2632,7 @@ self.output_y_remainder =
       if (active) {
         phase = "paused";
         clearTimeout(idleTimer);
+        clearTimeout(cooldownTimer);
         startButton.hidden = false;
         startButton.textContent = "計測を再開";
         stage.classList.add("stage-idle");
@@ -2866,6 +2643,10 @@ self.output_y_remainder =
     sensitivity.addEventListener("input", () => {
       sensitivityValue.textContent = `${(Number(sensitivity.value) / 100).toFixed(2)}×`;
       renderResults();
+    });
+
+    roundsSelect.addEventListener("change", () => {
+      resetSession(true);
     });
 
     ["f00", "f01", "f10", "f11"].forEach(id => {
@@ -2899,10 +2680,6 @@ self.output_y_remainder =
       applyMatrix,
       multiplyMatrices,
       angleError,
-      fitReliableCorrection,
-      classifyInliers,
-      matrixDriftDegrees,
-      applyLengthPreservingMatrix,
       fnv1a,
       encodeCalibrationBlob,
       decodeCalibrationBlob,
