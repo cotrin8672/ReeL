@@ -2,13 +2,16 @@ use embassy_time::{Duration, Instant};
 use rmk::{
     core_traits::Runnable,
     event::{
-        publish_event, Axis, AxisEvent, AxisValType, EventSubscriber, PointingEvent,
-        SubscribableEvent,
+        Axis, AxisEvent, AxisValType, EventSubscriber, PointingEvent, SubscribableEvent,
+        publish_event,
     },
 };
 
-const IMMEDIATE_MOTION_THRESHOLD: i32 = 4;
-const CUMULATIVE_MOTION_THRESHOLD: u32 = 6;
+// The trackball must move this far before the mouse layer is entered.  Keep
+// this as the single tuning point for the user-visible entry threshold.
+const MINIMUM_ENTRY_MOVEMENT: u32 = 12;
+const IMMEDIATE_MOTION_THRESHOLD: i32 = MINIMUM_ENTRY_MOVEMENT as i32;
+const CUMULATIVE_MOTION_THRESHOLD: u32 = MINIMUM_ENTRY_MOVEMENT;
 const ACCUMULATION_WINDOW: Duration = Duration::from_millis(100);
 
 #[derive(Default)]
@@ -27,10 +30,7 @@ impl MotionAccumulator {
         self.x = self.x.saturating_add(x);
         self.y = self.y.saturating_add(y);
 
-        self.x
-            .unsigned_abs()
-            .saturating_add(self.y.unsigned_abs())
-            >= CUMULATIVE_MOTION_THRESHOLD
+        self.x.unsigned_abs().saturating_add(self.y.unsigned_abs()) >= CUMULATIVE_MOTION_THRESHOLD
     }
 }
 
@@ -149,7 +149,7 @@ mod tests {
     fn slow_consistent_motion_eventually_triggers() {
         let mut motion = MotionAccumulator::default();
 
-        for _ in 0..5 {
+        for _ in 0..11 {
             assert!(!motion.add(1, 0));
         }
         assert!(motion.add(1, 0));

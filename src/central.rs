@@ -233,12 +233,15 @@ async fn main(spawner: Spawner) {
         .unwrap();
     behavior_config
         .auto_mouse_layer
-        .push(AutoMouseLayerConfig::new(
-            Some(AML_TRIGGER_DEVICE_ID),
-            3,
-            embassy_time::Duration::from_secs(5),
-            AML_TRIGGER_THRESHOLD,
-        ))
+        .push(
+            AutoMouseLayerConfig::new(
+                Some(AML_TRIGGER_DEVICE_ID),
+                3,
+                embassy_time::Duration::from_secs(5),
+                AML_TRIGGER_THRESHOLD,
+            )
+            .with_deactivate_on_key(&[]),
+        )
         .unwrap();
     let positional_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
