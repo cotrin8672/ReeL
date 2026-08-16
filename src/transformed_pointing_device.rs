@@ -7,6 +7,7 @@ use rmk::input_device::pointing::{InitState, PointingDriver};
 use rmk::macros::input_device;
 
 use crate::calibration_config::current_matrix;
+use crate::motion_smoother::MotionSmoother;
 use crate::trackball_transform::TrackballTransform;
 
 #[input_device(publish = PointingEvent)]
@@ -21,6 +22,7 @@ pub struct TransformingPointingDevice<S: PointingDriver> {
     accumulated_x: i32,
     accumulated_y: i32,
     transform: TrackballTransform,
+    smoother: MotionSmoother,
 }
 
 impl<S: PointingDriver> TransformingPointingDevice<S> {
@@ -42,6 +44,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             accumulated_x: 0,
             accumulated_y: 0,
             transform: TrackballTransform::new(),
+            smoother: MotionSmoother::new(),
         }
     }
 
@@ -91,7 +94,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
     }
 
     fn take_report_event(&mut self) -> Option<PointingEvent> {
-        if self.accumulated_x == 0 && self.accumulated_y == 0 {
+        if self.accumulated_x == 0 && self.accumulated_y == 0 && !self.smoother.has_pending() {
             return None;
         }
 
@@ -101,6 +104,11 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         self.accumulated_y = 0;
 
         let (x, y) = self.transform.apply(raw_x, raw_y, current_matrix());
+        let (x, y) = self.smoother.apply(x, y);
+
+        if x == 0 && y == 0 {
+            return None;
+        }
 
         Some(PointingEvent {
             device_id: self.id,
@@ -149,7 +157,8 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             };
 
             let report_wait = async {
-                if self.accumulated_x != 0 || self.accumulated_y != 0 {
+                if self.accumulated_x != 0 || self.accumulated_y != 0 || self.smoother.has_pending()
+                {
                     Timer::after(
                         self.report_interval
                             .checked_sub(self.last_report.elapsed())
@@ -167,8 +176,8 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
                     self.last_poll = Instant::now();
                 }
                 Either::Second(_) => {
+                    self.last_report = Instant::now();
                     if let Some(event) = self.take_report_event() {
-                        self.last_report = Instant::now();
                         return event;
                     }
                 }
