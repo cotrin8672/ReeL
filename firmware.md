@@ -34,11 +34,12 @@ memory LCDs are intentionally outside the current RMK port.
 
 ## Vial layout source
 
-`vial.json` is regenerated from the left and right KiCad PCB matrix netlists
-and switch positions. The generator follows each switch's `ColN` net to its
-diode and then follows that diode to `RowN`; the right half is offset to
-unified matrix columns 6..10. It uses the PCB positions to preserve the
-mirrored row and thumb-key order in Vial.
+`vial.json` is regenerated from the left and right KiCad PCB matrix netlists,
+switch positions, and `Edge.Cuts` bounds. The generator follows each switch's
+`ColN` net to its diode and then follows that diode to `RowN`; the right half is
+offset to unified matrix columns 6..10. It places each Vial key from the PCB
+geometry in 18 mm KLE units, preserving the board-relative stagger and thumb
+switch rotations.
 Run it from the repository root after a matrix or PCB change:
 
 ```powershell
