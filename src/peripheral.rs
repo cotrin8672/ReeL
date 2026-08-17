@@ -90,9 +90,10 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// BM4.0A01 has 9 electrical pulses and 18 detents per revolution, so one
-/// detent consists of two valid quadrature transitions. Decode both phases to
-/// retain their ordering and send only completed detents to the event task.
+/// Decode both phases to retain their ordering and emit on every valid
+/// quadrature transition. On the installed encoder, one such transition is
+/// observed per mechanical detent; requiring two transitions makes every
+/// second detent disappear.
 /// Keeping event transmission out of `run` ensures that its 5 ms press/release
 /// interval never pauses edge capture.
 struct LeftRotaryEncoder {
@@ -116,7 +117,7 @@ impl LeftRotaryEncoder {
             pin_a,
             pin_b,
             state,
-            phase: ResolutionPhase::new_with_detent_and_pulse(18, 9, true),
+            phase: ResolutionPhase::new(1, true),
         }
     }
 
