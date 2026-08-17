@@ -7,6 +7,7 @@ use rmk::input_device::pointing::{InitState, PointingDriver};
 use rmk::macros::input_device;
 
 use crate::calibration_config::current_matrix;
+use crate::motion_gain::MotionGain;
 use crate::motion_smoother::MotionSmoother;
 use crate::trackball_transform::TrackballTransform;
 
@@ -22,6 +23,7 @@ pub struct TransformingPointingDevice<S: PointingDriver> {
     accumulated_x: i32,
     accumulated_y: i32,
     transform: TrackballTransform,
+    gain: MotionGain,
     smoother: MotionSmoother,
 }
 
@@ -44,6 +46,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             accumulated_x: 0,
             accumulated_y: 0,
             transform: TrackballTransform::new(),
+            gain: MotionGain::new(),
             smoother: MotionSmoother::new(),
         }
     }
@@ -104,6 +107,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         self.accumulated_y = 0;
 
         let (x, y) = self.transform.apply(raw_x, raw_y, current_matrix());
+        let (x, y) = self.gain.apply(x, y);
         let (x, y) = self.smoother.apply(x, y);
 
         if x == 0 && y == 0 {
