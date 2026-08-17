@@ -24,10 +24,11 @@ use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::embassy_futures::select::select;
 use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
-use rmk::input_device::rotary_encoder::Direction;
+use rmk::input_device::rotary_encoder::{Direction, Phase, ResolutionPhase};
 use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
@@ -89,43 +90,50 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// BM4.0A01 has 9 electrical pulses and 18 detents per revolution. Therefore
-/// each detent crosses exactly one edge of either individual phase. Count only
-/// phase A edges and sample phase B for direction, yielding one event per
-/// detent without generating four BLE split messages for every click.
+/// BM4.0A01 has 9 electrical pulses and 18 detents per revolution, so one
+/// detent consists of two valid quadrature transitions. Decode both phases to
+/// retain their ordering and send only completed detents to the event task.
+/// Keeping event transmission out of `run` ensures that its 5 ms press/release
+/// interval never pauses edge capture.
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    a_low: bool,
+    state: u8,
+    phase: ResolutionPhase,
 }
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
-        let a_low = pin_a.is_low();
+        let mut state = 0;
+        if pin_a.is_low() {
+            state |= 0b01;
+        }
+        if pin_b.is_low() {
+            state |= 0b10;
+        }
+
         Self {
             pin_a,
             pin_b,
-            a_low,
+            state,
+            phase: ResolutionPhase::new_with_detent_and_pulse(18, 9, true),
         }
     }
 
-    fn sample_direction(&mut self) -> Direction {
-        let a_low = self.pin_a.is_low();
-        if a_low == self.a_low {
-            return Direction::None;
+    fn update(&mut self) -> Direction {
+        let mut state = self.state & 0b11;
+        if self.pin_a.is_low() {
+            state |= 0b0100;
         }
-
-        self.a_low = a_low;
-        if a_low != self.pin_b.is_low() {
-            Direction::Clockwise
-        } else {
-            Direction::CounterClockwise
+        if self.pin_b.is_low() {
+            state |= 0b1000;
         }
+        self.state = state >> 2;
+        self.phase.direction(state)
     }
 }
 
-const ENCODER_DEBOUNCE_MS: u64 = 3;
-const ENCODER_EVENT_QUEUE_SIZE: usize = 16;
+const ENCODER_EVENT_QUEUE_SIZE: usize = 64;
 static ENCODER_DIRECTION_CHANNEL: Channel<RawMutex, Direction, ENCODER_EVENT_QUEUE_SIZE> =
     Channel::new();
 
@@ -144,14 +152,13 @@ async fn encoder_event_task() -> ! {
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            let direction = self.sample_direction();
+            let (pin_a, pin_b) = (&mut self.pin_a, &mut self.pin_b);
+            select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
+
+            let direction = self.update();
             if direction != Direction::None {
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
-                continue;
             }
-
-            self.pin_a.wait_for_any_edge().await;
-            Timer::after_millis(ENCODER_DEBOUNCE_MS).await;
         }
     }
 }
