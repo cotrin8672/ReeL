@@ -9,8 +9,8 @@ const LUT_SIZE: usize = LUT_BUCKETS * LUT_OCTANTS;
 const RATIO_SCALE: i64 = 1 << 12;
 const MATRIX_SCALE_U64: u64 = MATRIX_SCALE as u64;
 
-/// The default path preserves the existing non-linear calibrated direction map.
-/// `Rotation` is available when a one-angle, length-preserving map is preferred.
+/// `Rotation` is the default length-preserving path. `DirectionLut` remains
+/// available when the full non-linear calibrated direction map is required.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransformMode {
@@ -18,7 +18,7 @@ pub enum TransformMode {
     Rotation,
 }
 
-pub const DEFAULT_TRANSFORM_MODE: TransformMode = TransformMode::DirectionLut;
+pub const DEFAULT_TRANSFORM_MODE: TransformMode = TransformMode::Rotation;
 
 #[derive(Clone, Copy)]
 struct DirectionEntry {
@@ -92,8 +92,10 @@ impl TrackballTransform {
             return;
         }
 
-        self.build_direction_lut(matrix);
-        self.rotation = build_rotation(matrix);
+        match self.mode {
+            TransformMode::DirectionLut => self.build_direction_lut(matrix),
+            TransformMode::Rotation => self.rotation = build_rotation(matrix),
+        }
         self.cached_matrix = Some(matrix);
         self.output_x_remainder = 0;
         self.output_y_remainder = 0;
@@ -272,7 +274,7 @@ mod tests {
 
     #[test]
     fn retains_fractional_motion() {
-        let mut transform = default_transform();
+        let mut transform = TrackballTransform::with_mode(TransformMode::DirectionLut);
         let mut total_x = 0_i32;
         let mut total_y = 0_i32;
         for _ in 0..1000 {
@@ -290,6 +292,28 @@ mod tests {
         let (x, y) = transform.apply(1000, 0, MatrixCoefficients::DEFAULT);
         let length_squared = i64::from(x) * i64::from(x) + i64::from(y) * i64::from(y);
         assert!((990_000..=1_010_000).contains(&length_squared));
+    }
+
+    #[test]
+    fn rebuilds_cached_transform_when_matrix_changes() {
+        let identity = MatrixCoefficients {
+            m00: 1000,
+            m01: 0,
+            m10: 0,
+            m11: 1000,
+        };
+        let quarter_turn = MatrixCoefficients {
+            m00: 0,
+            m01: -1000,
+            m10: 1000,
+            m11: 0,
+        };
+
+        for mode in [TransformMode::DirectionLut, TransformMode::Rotation] {
+            let mut transform = TrackballTransform::with_mode(mode);
+            assert_eq!(transform.apply(1000, 0, identity), (1000, 0));
+            assert_eq!(transform.apply(1000, 0, quarter_turn), (0, 1000));
+        }
     }
 
     #[test]
