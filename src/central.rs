@@ -5,6 +5,7 @@ mod keymap;
 #[macro_use]
 mod macros;
 mod calibration_config;
+mod motion_gain;
 mod motion_smoother;
 mod quick_mod_tap;
 mod sharp_lcd;
