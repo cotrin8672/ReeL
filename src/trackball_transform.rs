@@ -219,10 +219,20 @@ fn build_rotation(matrix: MatrixCoefficients) -> RotationCoefficients {
         return RotationCoefficients::IDENTITY;
     }
 
-    RotationCoefficients {
-        cos: (sum * DIRECTION_SCALE / length as i64) as i32,
-        sin: (difference * DIRECTION_SCALE / length as i64) as i32,
+    let mut cos = (sum * DIRECTION_SCALE / length as i64) as i32;
+    let mut sin = (difference * DIRECTION_SCALE / length as i64) as i32;
+
+    // The calibrated matrix is not guaranteed to be orthogonal. Anchor the
+    // nearest rotation's horizontal signs to the calibrated coefficients so
+    // converting it cannot silently mirror left/right motion.
+    if matrix.m00 != 0 && cos.signum() != matrix.m00.signum() {
+        cos = -cos;
     }
+    if matrix.m01 != 0 && (-sin).signum() != matrix.m01.signum() {
+        sin = -sin;
+    }
+
+    RotationCoefficients { cos, sin }
 }
 
 fn clamp_i16(value: i64) -> i16 {
@@ -292,6 +302,17 @@ mod tests {
         let (x, y) = transform.apply(1000, 0, MatrixCoefficients::DEFAULT);
         let length_squared = i64::from(x) * i64::from(x) + i64::from(y) * i64::from(y);
         assert!((990_000..=1_010_000).contains(&length_squared));
+    }
+
+    #[test]
+    fn rotation_preserves_calibrated_horizontal_signs() {
+        let mut raw_x_transform = default_transform();
+        let (raw_x_output, _) = raw_x_transform.apply(1000, 0, MatrixCoefficients::DEFAULT);
+        assert!(raw_x_output < 0, "raw X output={raw_x_output}");
+
+        let mut raw_y_transform = default_transform();
+        let (raw_y_output, _) = raw_y_transform.apply(0, 1000, MatrixCoefficients::DEFAULT);
+        assert!(raw_y_output > 0, "raw Y output={raw_y_output}");
     }
 
     #[test]
