@@ -3,7 +3,6 @@
 
 #[macro_use]
 mod macros;
-mod rotary_state;
 mod sharp_lcd;
 mod xiao_battery;
 
@@ -25,9 +24,10 @@ use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::event::{Axis, AxisEvent, AxisValType, PointingEvent, publish_event_async};
+use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
+use rmk::input_device::rotary_encoder::Direction;
 use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
@@ -36,7 +36,6 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
-use rotary_state::{EncoderDirection, RotaryState};
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -100,56 +99,41 @@ fn ble_addr() -> [u8; 6] {
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    state: RotaryState,
+    a_low: bool,
 }
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
         Self {
-            state: RotaryState::new(pin_a.is_low()),
+            a_low: pin_a.is_low(),
             pin_a,
             pin_b,
+        }
+    }
+
+    fn direction_at_a_edge(&self, a_low: bool) -> Direction {
+        if a_low != self.pin_b.is_low() {
+            Direction::Clockwise
+        } else {
+            Direction::CounterClockwise
         }
     }
 }
 
 const ENCODER_DEBOUNCE_MS: u64 = 3;
 const ENCODER_EVENT_QUEUE_SIZE: usize = 64;
-const ENCODER_POINTING_DEVICE_ID: u8 = 2;
-static ENCODER_DIRECTION_CHANNEL: Channel<RawMutex, EncoderDirection, ENCODER_EVENT_QUEUE_SIZE> =
+static ENCODER_DIRECTION_CHANNEL: Channel<RawMutex, Direction, ENCODER_EVENT_QUEUE_SIZE> =
     Channel::new();
 
 #[embassy_executor::task]
 async fn encoder_event_task() -> ! {
     loop {
         let direction = ENCODER_DIRECTION_CHANNEL.receive().await;
-        let y = match direction {
-            EncoderDirection::Clockwise => 1,
-            EncoderDirection::CounterClockwise => -1,
-        };
-        // A wheel step is a single split message. Unlike a synthetic key tap,
-        // it cannot leave RMK's mouse-key state stuck if a release is delayed.
-        publish_event_async(PointingEvent {
-            device_id: ENCODER_POINTING_DEVICE_ID,
-            axes: [
-                AxisEvent {
-                    typ: AxisValType::Rel,
-                    axis: Axis::X,
-                    value: 0,
-                },
-                AxisEvent {
-                    typ: AxisValType::Rel,
-                    axis: Axis::Y,
-                    value: y,
-                },
-                AxisEvent {
-                    typ: AxisValType::Rel,
-                    axis: Axis::Z,
-                    value: 0,
-                },
-            ],
-        })
-        .await;
+        publish_event_async(KeyboardEvent::rotary_encoder(0, direction, true)).await;
+        // Keep the tap visible to the split transport while edge capture keeps
+        // running independently in LeftRotaryEncoder::run.
+        Timer::after_millis(5).await;
+        publish_event_async(KeyboardEvent::rotary_encoder(0, direction, false)).await;
     }
 }
 
@@ -158,14 +142,21 @@ impl Runnable for LeftRotaryEncoder {
         loop {
             self.pin_a.wait_for_any_edge().await;
 
-            // Capture B immediately. A is deliberately evaluated only after
-            // debounce: its first sampled level can already have bounced back.
-            let b_low_at_a_edge = self.pin_b.is_low();
+            let edge_a_low = self.pin_a.is_low();
+            if edge_a_low == self.a_low {
+                continue;
+            }
+
+            // Capture direction before debounce. B may legitimately change
+            // during the debounce interval as the encoder reaches its detent.
+            let direction = self.direction_at_a_edge(edge_a_low);
 
             Timer::after_millis(ENCODER_DEBOUNCE_MS).await;
             let settled_a_low = self.pin_a.is_low();
+            self.a_low = settled_a_low;
 
-            if let Some(direction) = self.state.settle(b_low_at_a_edge, settled_a_low) {
+            // A transition that did not remain stable was contact bounce.
+            if settled_a_low == edge_a_low {
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }

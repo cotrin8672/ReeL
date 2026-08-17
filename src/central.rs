@@ -43,9 +43,7 @@ use rmk::futures::future::join;
 use rmk::host::HostService;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
 use rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
-use rmk::input_device::pointing::{
-    PointingMode, PointingProcessor, PointingProcessorConfig, ScrollConfig,
-};
+use rmk::input_device::pointing::{PointingProcessor, PointingProcessorConfig};
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::ble::central::scan_peripherals;
@@ -95,7 +93,6 @@ const L2CAP_RXQ: u8 = 3;
 const L2CAP_MTU: usize = 251;
 const TRACKBALL_DEVICE_ID: u8 = 0;
 const AML_TRIGGER_DEVICE_ID: u8 = 1;
-const ENCODER_POINTING_DEVICE_ID: u8 = 2;
 const AML_TRIGGER_THRESHOLD: u16 = 3;
 const NRF52840_FLASH_SIZE: u32 = 1024 * 1024;
 
@@ -305,21 +302,6 @@ async fn main(spawner: Spawner) {
             ..Default::default()
         },
     );
-    let mut encoder_scroll_processor = PointingProcessor::new(
-        &keymap,
-        PointingProcessorConfig {
-            device_id: ENCODER_POINTING_DEVICE_ID,
-            ..Default::default()
-        },
-    );
-    encoder_scroll_processor.set_pointing_mode(PointingMode::Scroll(ScrollConfig {
-        multiplier_x: 0,
-        divisor_x: 0,
-        multiplier_y: 1,
-        divisor_y: 1,
-        invert_x: false,
-        invert_y: false,
-    }));
     let mut auto_mouse_layer = AutoMouseLayerRunner::new(&keymap);
 
     let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
@@ -334,7 +316,6 @@ async fn main(spawner: Spawner) {
             smart_aml_trigger,
             mouse_layer_priority,
             pointing_processor,
-            encoder_scroll_processor,
             auto_mouse_layer,
             calibration_config,
             storage,
