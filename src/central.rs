@@ -6,6 +6,7 @@ mod keymap;
 mod macros;
 mod calibration_config;
 mod motion_smoother;
+mod mouse_layer_priority;
 mod quick_mod_tap;
 mod sharp_lcd;
 mod smart_aml_trigger;
@@ -56,6 +57,7 @@ use rmk::{
 };
 use static_cell::StaticCell;
 
+use mouse_layer_priority::{AUTO_MOUSE_LAYER, MouseLayerPriority};
 use quick_mod_tap::QuickModTap;
 use sharp_lcd::new_status_lcd;
 use smart_aml_trigger::SmartAutoMouseTrigger;
@@ -244,7 +246,7 @@ async fn main(spawner: Spawner) {
         .push(
             AutoMouseLayerConfig::new(
                 Some(AML_TRIGGER_DEVICE_ID),
-                3,
+                AUTO_MOUSE_LAYER,
                 embassy_time::Duration::from_secs(5),
                 AML_TRIGGER_THRESHOLD,
             )
@@ -291,6 +293,7 @@ async fn main(spawner: Spawner) {
         AML_TRIGGER_DEVICE_ID,
         AML_TRIGGER_THRESHOLD as i16,
     );
+    let mut mouse_layer_priority = MouseLayerPriority::new();
     let mut pointing_processor = PointingProcessor::new(
         &keymap,
         PointingProcessorConfig {
@@ -310,6 +313,7 @@ async fn main(spawner: Spawner) {
             matrix,
             trackball,
             smart_aml_trigger,
+            mouse_layer_priority,
             pointing_processor,
             auto_mouse_layer,
             calibration_config,

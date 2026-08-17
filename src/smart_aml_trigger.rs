@@ -7,6 +7,8 @@ use rmk::{
     },
 };
 
+use crate::mouse_layer_priority::manual_layer_is_active;
+
 // The trackball must move this far before the mouse layer is entered.  Keep
 // this as the single tuning point for the user-visible entry threshold.
 const MINIMUM_ENTRY_MOVEMENT: u32 = 12;
@@ -55,6 +57,12 @@ impl SmartAutoMouseTrigger {
 
     fn handle_event(&mut self, event: PointingEvent) {
         if event.device_id != self.source_device_id {
+            return;
+        }
+
+        if manual_layer_is_active() {
+            self.accumulated_motion.reset();
+            self.last_motion_at = None;
             return;
         }
 

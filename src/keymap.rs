@@ -34,10 +34,10 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No)],
         ],
         [
-            [a!(Transparent), a!(Transparent), k!(F3), k!(F2), k!(F1), a!(No), k!(F10), k!(F9), k!(F8), k!(F7), k!(F6)],
+            [k!(F5), k!(F4), k!(F3), k!(F2), k!(F1), a!(No), k!(F10), k!(F9), k!(F8), k!(F7), k!(F6)],
             [a!(Transparent), shifted!(Backslash), shifted!(Kc7), shifted!(Kc1), shifted!(Kc6), a!(Transparent), shifted!(Kc4), k!(Right), k!(Up), k!(Down), k!(Left)],
-            [a!(Transparent), shifted!(Kc3), wm!(S, GUI_SHIFT), shifted!(Grave), wm!(S, GUI_SHIFT), user!(5), a!(Transparent), k!(Backslash), shifted!(Kc2), k!(Equal), a!(Transparent)],
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No)],
+            [a!(Transparent), shifted!(Kc3), wm!(S, GUI_SHIFT), shifted!(Grave), wm!(S, GUI_SHIFT), user!(5), k!(Backslash), a!(Transparent), shifted!(Kc2), k!(Equal), a!(Transparent)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), k!(F11), k!(F12), a!(Transparent), a!(Transparent), a!(No)],
         ],
         [
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent)],

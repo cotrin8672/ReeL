@@ -3,4 +3,5 @@ ble_profiles_num = 5
 auto_mouse_layer_max_num = 2
 
 [event.action]
-subs = 1
+pubs = 2
+subs = 2
