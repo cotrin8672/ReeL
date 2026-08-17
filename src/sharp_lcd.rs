@@ -9,7 +9,7 @@ use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use rmk::core_traits::Runnable;
 use rmk::display::{DisplayDriver, DisplayProcessor, DisplayRenderer, RenderContext};
-use rmk::types::battery::BatteryStatus;
+use rmk::types::battery::{BatteryStatus, ChargeState};
 use static_cell::StaticCell;
 
 const WIDTH: usize = 160;
@@ -241,6 +241,42 @@ fn battery_level(status: BatteryStatus) -> Option<u8> {
     }
 }
 
+fn battery_is_charging(status: BatteryStatus) -> bool {
+    matches!(
+        status,
+        BatteryStatus::Available {
+            charge_state: ChargeState::Charging,
+            ..
+        }
+    )
+}
+
+fn draw_charging_mark<D>(display: &mut D)
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    // Charging mark option 1: the selected 9x9 stepped lightning bolt.
+    const MARK: [u16; 9] = [
+        0b000011000,
+        0b000111000,
+        0b001111000,
+        0b011111100,
+        0b111111100,
+        0b000111000,
+        0b001110000,
+        0b011000000,
+        0b110000000,
+    ];
+
+    for (row, bits) in MARK.iter().copied().enumerate() {
+        for column in 0..9 {
+            if bits & (1 << (8 - column)) != 0 {
+                draw_pixel(display, 22 + column, 4 + row as i32);
+            }
+        }
+    }
+}
+
 fn glyph(character: u8) -> (&'static [u8; 8], i32) {
     const DIGITS: [[u8; 8]; 10] = [
         [0x1c, 0x36, 0x22, 0x22, 0x22, 0x22, 0x36, 0x1c],
@@ -279,7 +315,7 @@ where
     advance
 }
 
-fn draw_battery<D>(display: &mut D, level: Option<u8>)
+fn draw_battery<D>(display: &mut D, level: Option<u8>, charging: bool)
 where
     D: DrawTarget<Color = BinaryColor>,
 {
@@ -290,7 +326,11 @@ where
         }
     }
 
-    let mut x = 24;
+    if charging {
+        draw_charging_mark(display);
+    }
+
+    let mut x = 32;
     if let Some(level) = level {
         if level == 100 {
             x += draw_character(display, x, 4, b'1');
@@ -310,7 +350,9 @@ fn draw_split_connection<D>(display: &mut D, connected: bool)
 where
     D: DrawTarget<Color = BinaryColor>,
 {
-    for (x0, y0, x1, y1) in [(52, 9, 55, 12), (57, 6, 60, 12), (62, 3, 65, 12)] {
+    // Keep the original 14x10 connection glyph intact, but move it below the
+    // top status row so the selected 9x9 charging mark and 100% do not collide.
+    for (x0, y0, x1, y1) in [(52, 26, 55, 29), (57, 23, 60, 29), (62, 20, 65, 29)] {
         draw_rectangle(display, x0, y0, x1, y1, connected);
     }
 }
@@ -348,7 +390,11 @@ impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
         let _ = display.clear(BinaryColor::Off);
         draw_base(display);
 
-        draw_battery(display, battery_level(ctx.battery.0));
+        draw_battery(
+            display,
+            battery_level(ctx.battery.0),
+            battery_is_charging(ctx.battery.0),
+        );
         let split_connected = if self.central {
             ctx.peripherals_connected.first().copied().unwrap_or(false)
         } else {

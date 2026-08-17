@@ -26,7 +26,7 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::embassy_futures::select::select;
 use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
-use rmk::input_device::battery::BatteryProcessor;
+use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
 use rmk::input_device::rotary_encoder::{Direction, Phase, ResolutionPhase};
 use rmk::matrix::Matrix;
 use rmk::run_all;
@@ -169,6 +169,7 @@ async fn main(spawner: Spawner) {
     let mut battery_monitor =
         XiaoBatteryMonitor::new(p.P0_31.degrade_saadc(), p.SAADC, p.P0_14).await;
     let mut battery_processor = BatteryProcessor::new(DIVIDER_MEASURED, DIVIDER_TOTAL);
+    let mut charging_state_reader = ChargingStateReader::new(Input::new(p.P0_17, Pull::Up), true);
     let mut battery_snapshot = PeripheralBatterySnapshot::new();
 
     let mpsl_peripherals =
@@ -229,6 +230,7 @@ async fn main(spawner: Spawner) {
             watchdog,
             battery_monitor,
             battery_processor,
+            charging_state_reader,
             battery_snapshot,
             lcd,
             lcd_vcom
