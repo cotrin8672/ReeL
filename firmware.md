@@ -27,12 +27,13 @@ memory LCDs are intentionally outside the current RMK port.
       [-0.831,  0.562]
   ```
 
-  The central firmware uses the precomputed one-angle `TransformMode::Rotation`
-  path by default. The alternative direction-LUT path caches the normalized
-  map in 8 octants with 64 ratio buckets whenever the calibration matrix
-  changes. Small motion uses an adaptive low-pass filter, larger motion
-  bypasses it, and the independent gain is unity by default
-  (`src/motion_gain.rs`).
+  The central firmware uses `TransformMode::Automatic`: an orthogonal
+  calibration matrix uses precomputed one-angle rotation coefficients, while
+  the existing non-orthogonal calibration uses a normalized direction map
+  cached in 8 octants with 64 ratio buckets. Either cache is rebuilt only when
+  the calibration matrix changes. Small motion uses an adaptive low-pass
+  filter, larger motion bypasses it, and the independent gain is unity by
+  default (`src/motion_gain.rs`).
 
 - Auto Mouse Layer 3 with a five-second timeout
 - Mouse buttons 1/2 on the J/K positions while the mouse layer is active

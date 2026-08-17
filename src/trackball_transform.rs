@@ -9,16 +9,17 @@ const LUT_SIZE: usize = LUT_BUCKETS * LUT_OCTANTS;
 const RATIO_SCALE: i64 = 1 << 12;
 const MATRIX_SCALE_U64: u64 = MATRIX_SCALE as u64;
 
-/// `Rotation` is the default length-preserving path. `DirectionLut` remains
-/// available when the full non-linear calibrated direction map is required.
+/// `Automatic` uses a precomputed rotation only for an orthogonal calibration
+/// matrix. Non-orthogonal matrices use the full normalized direction LUT.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransformMode {
     DirectionLut,
     Rotation,
+    Automatic,
 }
 
-pub const DEFAULT_TRANSFORM_MODE: TransformMode = TransformMode::Rotation;
+pub const DEFAULT_TRANSFORM_MODE: TransformMode = TransformMode::Automatic;
 
 #[derive(Clone, Copy)]
 struct DirectionEntry {
@@ -50,6 +51,7 @@ pub struct TrackballTransform {
     direction_lut: [DirectionEntry; LUT_SIZE],
     rotation: RotationCoefficients,
     mode: TransformMode,
+    active_mode: TransformMode,
 }
 
 impl Default for TrackballTransform {
@@ -71,6 +73,7 @@ impl TrackballTransform {
             direction_lut: [DirectionEntry::ZERO; LUT_SIZE],
             rotation: RotationCoefficients::IDENTITY,
             mode,
+            active_mode: mode,
         }
     }
 
@@ -81,9 +84,10 @@ impl TrackballTransform {
 
         self.ensure_cache(matrix);
 
-        match self.mode {
+        match self.active_mode {
             TransformMode::DirectionLut => self.apply_direction_lut(raw_x, raw_y),
             TransformMode::Rotation => self.apply_rotation(raw_x, raw_y),
+            TransformMode::Automatic => unreachable!(),
         }
     }
 
@@ -92,9 +96,22 @@ impl TrackballTransform {
             return;
         }
 
-        match self.mode {
+        self.active_mode = match self.mode {
+            TransformMode::DirectionLut => TransformMode::DirectionLut,
+            TransformMode::Rotation => TransformMode::Rotation,
+            TransformMode::Automatic => {
+                if is_rotation_compatible(matrix) {
+                    TransformMode::Rotation
+                } else {
+                    TransformMode::DirectionLut
+                }
+            }
+        };
+
+        match self.active_mode {
             TransformMode::DirectionLut => self.build_direction_lut(matrix),
             TransformMode::Rotation => self.rotation = build_rotation(matrix),
+            TransformMode::Automatic => unreachable!(),
         }
         self.cached_matrix = Some(matrix);
         self.output_x_remainder = 0;
@@ -210,6 +227,26 @@ fn normalized_per_max(raw_x: i64, raw_y: i64, matrix: MatrixCoefficients) -> Dir
     }
 }
 
+fn is_rotation_compatible(matrix: MatrixCoefficients) -> bool {
+    const TOLERANCE_DENOMINATOR: i128 = 32;
+
+    let m00 = i128::from(matrix.m00);
+    let m01 = i128::from(matrix.m01);
+    let m10 = i128::from(matrix.m10);
+    let m11 = i128::from(matrix.m11);
+    let first_column_squared = m00 * m00 + m10 * m10;
+    let second_column_squared = m01 * m01 + m11 * m11;
+    let maximum_column_squared = first_column_squared.max(second_column_squared);
+    if maximum_column_squared == 0 {
+        return false;
+    }
+
+    let columns_dot = (m00 * m01 + m10 * m11).abs();
+    let columns_length_difference = (first_column_squared - second_column_squared).abs();
+    columns_dot * TOLERANCE_DENOMINATOR <= maximum_column_squared
+        && columns_length_difference * TOLERANCE_DENOMINATOR <= maximum_column_squared
+}
+
 fn build_rotation(matrix: MatrixCoefficients) -> RotationCoefficients {
     let sum = i64::from(matrix.m00) + i64::from(matrix.m11);
     let difference = i64::from(matrix.m10) - i64::from(matrix.m01);
@@ -219,20 +256,10 @@ fn build_rotation(matrix: MatrixCoefficients) -> RotationCoefficients {
         return RotationCoefficients::IDENTITY;
     }
 
-    let mut cos = (sum * DIRECTION_SCALE / length as i64) as i32;
-    let mut sin = (difference * DIRECTION_SCALE / length as i64) as i32;
-
-    // The calibrated matrix is not guaranteed to be orthogonal. Anchor the
-    // nearest rotation's horizontal signs to the calibrated coefficients so
-    // converting it cannot silently mirror left/right motion.
-    if matrix.m00 != 0 && cos.signum() != matrix.m00.signum() {
-        cos = -cos;
+    RotationCoefficients {
+        cos: (sum * DIRECTION_SCALE / length as i64) as i32,
+        sin: (difference * DIRECTION_SCALE / length as i64) as i32,
     }
-    if matrix.m01 != 0 && (-sin).signum() != matrix.m01.signum() {
-        sin = -sin;
-    }
-
-    RotationCoefficients { cos, sin }
 }
 
 fn clamp_i16(value: i64) -> i16 {
@@ -299,20 +326,45 @@ mod tests {
     #[test]
     fn rotation_mode_preserves_length() {
         let mut transform = TrackballTransform::with_mode(TransformMode::Rotation);
-        let (x, y) = transform.apply(1000, 0, MatrixCoefficients::DEFAULT);
+        let quarter_turn = MatrixCoefficients {
+            m00: 0,
+            m01: -1000,
+            m10: 1000,
+            m11: 0,
+        };
+        let (x, y) = transform.apply(1000, 0, quarter_turn);
         let length_squared = i64::from(x) * i64::from(x) + i64::from(y) * i64::from(y);
         assert!((990_000..=1_010_000).contains(&length_squared));
     }
 
     #[test]
-    fn rotation_preserves_calibrated_horizontal_signs() {
+    fn automatic_mode_preserves_calibrated_direction() {
         let mut raw_x_transform = default_transform();
-        let (raw_x_output, _) = raw_x_transform.apply(1000, 0, MatrixCoefficients::DEFAULT);
+        let (raw_x_output, raw_x_vertical) =
+            raw_x_transform.apply(1000, 0, MatrixCoefficients::DEFAULT);
+        assert_eq!(raw_x_transform.active_mode, TransformMode::DirectionLut);
         assert!(raw_x_output < 0, "raw X output={raw_x_output}");
+        assert!(raw_x_vertical < 0, "raw X vertical output={raw_x_vertical}");
 
         let mut raw_y_transform = default_transform();
-        let (raw_y_output, _) = raw_y_transform.apply(0, 1000, MatrixCoefficients::DEFAULT);
+        let (raw_y_output, raw_y_vertical) =
+            raw_y_transform.apply(0, 1000, MatrixCoefficients::DEFAULT);
+        assert_eq!(raw_y_transform.active_mode, TransformMode::DirectionLut);
         assert!(raw_y_output > 0, "raw Y output={raw_y_output}");
+        assert!(raw_y_vertical > 0, "raw Y vertical output={raw_y_vertical}");
+    }
+
+    #[test]
+    fn automatic_mode_uses_rotation_for_orthogonal_matrix() {
+        let identity = MatrixCoefficients {
+            m00: 1000,
+            m01: 0,
+            m10: 0,
+            m11: 1000,
+        };
+        let mut transform = default_transform();
+        assert_eq!(transform.apply(1000, 0, identity), (1000, 0));
+        assert_eq!(transform.active_mode, TransformMode::Rotation);
     }
 
     #[test]
@@ -330,7 +382,11 @@ mod tests {
             m11: 0,
         };
 
-        for mode in [TransformMode::DirectionLut, TransformMode::Rotation] {
+        for mode in [
+            TransformMode::DirectionLut,
+            TransformMode::Rotation,
+            TransformMode::Automatic,
+        ] {
             let mut transform = TrackballTransform::with_mode(mode);
             assert_eq!(transform.apply(1000, 0, identity), (1000, 0));
             assert_eq!(transform.apply(1000, 0, quarter_turn), (0, 1000));
