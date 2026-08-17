@@ -189,10 +189,13 @@ async fn main(spawner: Spawner) {
 
     let mpsl_peripherals =
         mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
+    // XIAO nRF52840 has a 32.768 kHz crystal. Using it avoids LFRC
+    // calibration work and its associated high-frequency-clock wakeups.
+    // The RC-only fields must be zero when the XTAL source is selected.
     let lfclk_config = mpsl::raw::mpsl_clock_lfclk_cfg_t {
-        source: mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
-        rc_ctiv: mpsl::raw::MPSL_RECOMMENDED_RC_CTIV as u8,
-        rc_temp_ctiv: mpsl::raw::MPSL_RECOMMENDED_RC_TEMP_CTIV as u8,
+        source: mpsl::raw::MPSL_CLOCK_LF_SRC_XTAL as u8,
+        rc_ctiv: 0,
+        rc_temp_ctiv: 0,
         accuracy_ppm: mpsl::raw::MPSL_DEFAULT_CLOCK_ACCURACY_PPM as u16,
         skip_wait_lfclk_started: mpsl::raw::MPSL_DEFAULT_SKIP_WAIT_LFCLK_STARTED != 0,
     };

@@ -11,6 +11,7 @@ use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 
 pub const DIVIDER_MEASURED: u32 = 510;
 pub const DIVIDER_TOTAL: u32 = 1510;
+const BATTERY_SAMPLE_INTERVAL_SECS: u64 = 60;
 
 /// Battery monitor for the XIAO nRF52840 onboard divider.
 pub struct XiaoBatteryMonitor {
@@ -44,7 +45,9 @@ impl XiaoBatteryMonitor {
                 saadc,
                 [AnalogEventType::Battery],
                 [0],
-                Duration::from_secs(12),
+                // Battery status does not need sub-minute updates. Fewer
+                // SAADC wakeups reduce idle power without changing BLE timing.
+                Duration::from_secs(BATTERY_SAMPLE_INTERVAL_SECS),
                 None,
             ),
             _read_enable: read_enable,
@@ -74,7 +77,7 @@ impl PeripheralBatterySnapshot {
 impl Runnable for PeripheralBatterySnapshot {
     async fn run(&mut self) -> ! {
         let mut subscriber = BatteryStatusEvent::subscriber();
-        let mut ticker = Ticker::every(Duration::from_secs(12));
+        let mut ticker = Ticker::every(Duration::from_secs(BATTERY_SAMPLE_INTERVAL_SECS));
 
         loop {
             match select(subscriber.next_event(), ticker.next()).await {
