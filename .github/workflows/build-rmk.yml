@@ -53,6 +53,11 @@ jobs:
           new Function(match[1]);
           NODE
 
+      - name: Test rotary encoder state machine
+        run: |
+          rustc --edition=2024 --test src/rotary_state.rs -o /tmp/rotary-state-tests
+          /tmp/rotary-state-tests
+
       - name: Install firmware conversion tools
         run: cargo install cargo-binutils cargo-hex-to-uf2 --locked
 
