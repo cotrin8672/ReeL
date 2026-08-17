@@ -203,7 +203,14 @@ fn draw_pixel<D>(display: &mut D, x: i32, y: i32)
 where
     D: DrawTarget<Color = BinaryColor>,
 {
-    let _ = display.draw_iter(core::iter::once(Pixel(Point::new(x, y), BinaryColor::On)));
+    draw_pixel_color(display, x, y, BinaryColor::On);
+}
+
+fn draw_pixel_color<D>(display: &mut D, x: i32, y: i32, color: BinaryColor)
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    let _ = display.draw_iter(core::iter::once(Pixel(Point::new(x, y), color)));
 }
 
 fn draw_rectangle<D>(display: &mut D, x0: i32, y0: i32, x1: i32, y1: i32, filled: bool)
@@ -251,27 +258,38 @@ fn battery_is_charging(status: BatteryStatus) -> bool {
     )
 }
 
-fn draw_charging_mark<D>(display: &mut D)
+fn draw_charging_mark<D>(display: &mut D, level: Option<u8>)
 where
     D: DrawTarget<Color = BinaryColor>,
 {
-    // Charging mark option 1: the selected 9x9 stepped lightning bolt.
-    const MARK: [u16; 9] = [
-        0b000011000,
-        0b000111000,
-        0b001111000,
-        0b011111100,
-        0b111111100,
-        0b000111000,
-        0b001110000,
-        0b011000000,
-        0b110000000,
+    // Keep the approved 5x5 lightning bolt inside the existing battery body.
+    const MARK: [u8; 5] = [
+        0b00100, // ..#..
+        0b01100, // .##..
+        0b11111, // #####
+        0b00110, // ..##.
+        0b01100, // .##..
     ];
+    let fill_width = level
+        .map(|level| i32::from((13 * u16::from(level) + 50) / 100))
+        .unwrap_or(0);
 
     for (row, bits) in MARK.iter().copied().enumerate() {
-        for column in 0..9 {
-            if bits & (1 << (8 - column)) != 0 {
-                draw_pixel(display, 22 + column, 4 + row as i32);
+        for column in 0..5 {
+            if bits & (1 << (4 - column)) != 0 {
+                let x = 8 + column;
+                let y = 6 + row as i32;
+                let filled = fill_width > 0 && (4..=3 + fill_width).contains(&x);
+                draw_pixel_color(
+                    display,
+                    x,
+                    y,
+                    if filled {
+                        BinaryColor::Off
+                    } else {
+                        BinaryColor::On
+                    },
+                );
             }
         }
     }
@@ -327,10 +345,10 @@ where
     }
 
     if charging {
-        draw_charging_mark(display);
+        draw_charging_mark(display, level);
     }
 
-    let mut x = 32;
+    let mut x = 24;
     if let Some(level) = level {
         if level == 100 {
             x += draw_character(display, x, 4, b'1');
@@ -350,9 +368,7 @@ fn draw_split_connection<D>(display: &mut D, connected: bool)
 where
     D: DrawTarget<Color = BinaryColor>,
 {
-    // Keep the original 14x10 connection glyph intact, but move it below the
-    // top status row so the selected 9x9 charging mark and 100% do not collide.
-    for (x0, y0, x1, y1) in [(52, 26, 55, 29), (57, 23, 60, 29), (62, 20, 65, 29)] {
+    for (x0, y0, x1, y1) in [(52, 9, 55, 12), (57, 6, 60, 12), (62, 3, 65, 12)] {
         draw_rectangle(display, x0, y0, x1, y1, connected);
     }
 }
