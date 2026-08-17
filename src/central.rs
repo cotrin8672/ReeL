@@ -224,7 +224,7 @@ async fn main(spawner: Spawner) {
     behavior_config.morse.default_profile = behavior_config
         .morse
         .default_profile
-        .with_mode(Some(MorseMode::HoldOnOtherPress))
+        .with_mode(Some(MorseMode::PermissiveHold))
         .with_hold_timeout_ms(Some(220));
     behavior_config
         .morse
