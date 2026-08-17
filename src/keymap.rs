@@ -22,7 +22,7 @@ const HOLD_PREFERRED_PROFILE: MorseProfile =
 pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
         [
-            [k!(T), mt!(R, ModifierCombination::LCTRL), k!(E), k!(W), k!(Q), a!(No), k!(P), k!(O), k!(I), k!(U), k!(Y)],
+            [k!(T), k!(R), k!(E), k!(W), k!(Q), a!(No), k!(P), k!(O), k!(I), k!(U), k!(Y)],
             [k!(G), k!(F), k!(D), k!(S), k!(A), mt!(Semicolon, CTRL_SHIFT), k!(Semicolon), k!(L), k!(K), k!(J), k!(H)],
             [k!(B), k!(V), k!(C), k!(X), k!(Z), mt!(Escape, ModifierCombination::LCTRL), k!(Slash), k!(Dot), k!(Comma), k!(M), k!(N)],
             [k!(MouseBtn4), k!(MouseBtn5), mtp!(Language2, ModifierCombination::LSHIFT, HOLD_PREFERRED_PROFILE), lt!(1, Space), mt!(Language1, ModifierCombination::LALT), a!(No), k!(Minus), k!(Tab), lt!(2, Enter), td!(0), a!(No)],

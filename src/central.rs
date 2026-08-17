@@ -200,7 +200,7 @@ async fn main(spawner: Spawner) {
     let storage_config = StorageConfig {
         start_addr: 0xA0000,
         num_sectors: 6,
-        clear_layout: true,
+        clear_layout: false,
         ..Default::default()
     };
     let rmk_config = RmkConfig {
