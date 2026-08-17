@@ -264,6 +264,13 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 5, true, 0, 6>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
     let host_context = rmk::host::KeyboardContext::new(&keymap);
+    let enforced_default_profile = host_context
+        .morse_default_profile()
+        .with_mode(Some(MorseMode::HoldOnOtherPress))
+        .with_hold_timeout_ms(Some(220));
+    host_context
+        .set_morse_default_profile(enforced_default_profile)
+        .await;
     let mut calibration_config = CalibrationConfigWatcher::with_migration(
         &host_context,
         calibration_flash,
