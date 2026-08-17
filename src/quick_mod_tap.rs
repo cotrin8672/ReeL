@@ -1,7 +1,7 @@
 use rmk::types::action::Action;
 use rmk::types::morse::{Morse, MorseMode, MorseProfile};
 
-const HOLD_TIMEOUT_MS: u16 = 200;
+const HOLD_TIMEOUT_MS: u16 = 220;
 const DANCE_TIMEOUT_MS: u16 = 200;
 
 /// A modifier-tap action with an independent action for tap-then-hold.
