@@ -14,25 +14,26 @@ use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
 use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
+use embassy_sync::channel::Channel;
+use embassy_time::Timer;
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use panic_probe as _;
-use rmk::HostResources;
 use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::embassy_futures::select::select;
 use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
-use rmk::input_device::rotary_encoder::{Direction, Phase, ResolutionPhase};
+use rmk::input_device::rotary_encoder::Direction;
 use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
 use rmk::watchdog::Nrf52Watchdog;
+use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
 use sharp_lcd::new_status_lcd;
@@ -88,62 +89,69 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// RMK's stock encoder emits a release event from a separate read and waits
-/// 5 ms before listening for another edge. That dead time can drop the next
-/// quadrature transition on this mechanical encoder. Keep the same RMK phase
-/// decoder, but publish the press/release pair immediately so every edge can
-/// be sampled.
+/// BM4.0A01 has 9 electrical pulses and 18 detents per revolution. Therefore
+/// each detent crosses exactly one edge of either individual phase. Count only
+/// phase A edges and sample phase B for direction, yielding one event per
+/// detent without generating four BLE split messages for every click.
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    state: u8,
-    phase: ResolutionPhase,
+    a_low: bool,
 }
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
-        let mut state = 0;
-        if pin_a.is_low() {
-            state |= 0b01;
-        }
-        if pin_b.is_low() {
-            state |= 0b10;
-        }
-
+        let a_low = pin_a.is_low();
         Self {
             pin_a,
             pin_b,
-            state,
-            // BM4.0A01: 9 pulses/revolution and 18 detents, so one detent
-            // corresponds to two valid quadrature transitions.
-            phase: ResolutionPhase::new(1, true),
+            a_low,
         }
     }
 
-    fn update(&mut self) -> Direction {
-        let mut state = self.state & 0b11;
-        if self.pin_a.is_low() {
-            state |= 0b0100;
+    fn sample_direction(&mut self) -> Direction {
+        let a_low = self.pin_a.is_low();
+        if a_low == self.a_low {
+            return Direction::None;
         }
-        if self.pin_b.is_low() {
-            state |= 0b1000;
+
+        self.a_low = a_low;
+        if a_low != self.pin_b.is_low() {
+            Direction::Clockwise
+        } else {
+            Direction::CounterClockwise
         }
-        self.state = state >> 2;
-        self.phase.direction(state)
+    }
+}
+
+const ENCODER_DEBOUNCE_MS: u64 = 3;
+const ENCODER_EVENT_QUEUE_SIZE: usize = 16;
+static ENCODER_DIRECTION_CHANNEL: Channel<RawMutex, Direction, ENCODER_EVENT_QUEUE_SIZE> =
+    Channel::new();
+
+#[embassy_executor::task]
+async fn encoder_event_task() -> ! {
+    loop {
+        let direction = ENCODER_DIRECTION_CHANNEL.receive().await;
+        publish_event_async(KeyboardEvent::rotary_encoder(0, direction, true)).await;
+        // Keep the tap visible to the split transport while edge capture keeps
+        // running independently in LeftRotaryEncoder::run.
+        Timer::after_millis(5).await;
+        publish_event_async(KeyboardEvent::rotary_encoder(0, direction, false)).await;
     }
 }
 
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            let (pin_a, pin_b) = (&mut self.pin_a, &mut self.pin_b);
-            select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
-
-            let direction = self.update();
+            let direction = self.sample_direction();
             if direction != Direction::None {
-                publish_event_async(KeyboardEvent::rotary_encoder(0, direction, true)).await;
-                publish_event_async(KeyboardEvent::rotary_encoder(0, direction, false)).await;
+                ENCODER_DIRECTION_CHANNEL.send(direction).await;
+                continue;
             }
+
+            self.pin_a.wait_for_any_edge().await;
+            Timer::after_millis(ENCODER_DEBOUNCE_MS).await;
         }
     }
 }
@@ -220,6 +228,7 @@ async fn main(spawner: Spawner) {
     let encoder_a = Input::new(p.P1_14, Pull::Up);
     let encoder_b = Input::new(p.P1_15, Pull::Up);
     let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
+    spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
     join(
