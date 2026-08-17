@@ -24,11 +24,10 @@ use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::embassy_futures::select::select;
 use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
-use rmk::input_device::rotary_encoder::{Direction, Phase, ResolutionPhase};
+use rmk::input_device::rotary_encoder::Direction;
 use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
@@ -90,50 +89,38 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// Decode both phases to retain their ordering and emit on every valid
-/// quadrature transition. On the installed encoder, one such transition is
-/// observed per mechanical detent; requiring two transitions makes every
-/// second detent disappear.
-/// Keeping event transmission out of `run` ensures that its 5 ms press/release
-/// interval never pauses edge capture.
+/// Read one event per mechanical detent from phase A.
+///
+/// Phase B must be sampled immediately when A changes. Delaying that sample
+/// until after debounce lets B reach the next stable state and destroys the
+/// direction information. Waiting on both pins with `select` is also unsafe
+/// here because completing one wait cancels the other and can discard the
+/// closely following quadrature edge.
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    state: u8,
-    phase: ResolutionPhase,
+    a_low: bool,
 }
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
-        let mut state = 0;
-        if pin_a.is_low() {
-            state |= 0b01;
-        }
-        if pin_b.is_low() {
-            state |= 0b10;
-        }
-
         Self {
+            a_low: pin_a.is_low(),
             pin_a,
             pin_b,
-            state,
-            phase: ResolutionPhase::new(1, true),
         }
     }
 
-    fn update(&mut self) -> Direction {
-        let mut state = self.state & 0b11;
-        if self.pin_a.is_low() {
-            state |= 0b0100;
+    fn direction_at_a_edge(&self, a_low: bool) -> Direction {
+        if a_low != self.pin_b.is_low() {
+            Direction::Clockwise
+        } else {
+            Direction::CounterClockwise
         }
-        if self.pin_b.is_low() {
-            state |= 0b1000;
-        }
-        self.state = state >> 2;
-        self.phase.direction(state)
     }
 }
 
+const ENCODER_DEBOUNCE_MS: u64 = 3;
 const ENCODER_EVENT_QUEUE_SIZE: usize = 64;
 static ENCODER_DIRECTION_CHANNEL: Channel<RawMutex, Direction, ENCODER_EVENT_QUEUE_SIZE> =
     Channel::new();
@@ -153,11 +140,23 @@ async fn encoder_event_task() -> ! {
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            let (pin_a, pin_b) = (&mut self.pin_a, &mut self.pin_b);
-            select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
+            self.pin_a.wait_for_any_edge().await;
 
-            let direction = self.update();
-            if direction != Direction::None {
+            let edge_a_low = self.pin_a.is_low();
+            if edge_a_low == self.a_low {
+                continue;
+            }
+
+            // Capture direction before debounce. B may legitimately change
+            // during the debounce interval as the encoder reaches its detent.
+            let direction = self.direction_at_a_edge(edge_a_low);
+
+            Timer::after_millis(ENCODER_DEBOUNCE_MS).await;
+            let settled_a_low = self.pin_a.is_low();
+            self.a_low = settled_a_low;
+
+            // A transition that did not remain stable was contact bounce.
+            if settled_a_low == edge_a_low {
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }
