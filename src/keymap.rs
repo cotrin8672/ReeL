@@ -1,7 +1,7 @@
 use rmk::types::action::{Action, EncoderAction, KeyAction};
 use rmk::types::modifier::ModifierCombination;
 use rmk::types::morse::{MorseMode, MorseProfile};
-use rmk::{a, encoder, k, lt, mt, mtp, shifted, td, wm};
+use rmk::{a, encoder, k, lt, mt, mtp, shifted, td, user, wm};
 
 pub const ROW: usize = 4;
 pub const COL: usize = 11;
@@ -29,15 +29,15 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
         ],
         [
             [k!(Kc5), k!(Kc4), k!(Kc3), k!(Kc2), k!(Kc1), a!(No), k!(Kc0), k!(Kc9), k!(Kc8), k!(Kc7), k!(Kc6)],
-            [shifted!(Dot), shifted!(Comma), shifted!(Kc9), shifted!(LeftBracket), k!(LeftBracket), shifted!(Quote), a!(Transparent), k!(Quote), k!(RightBracket), shifted!(RightBracket), shifted!(Kc0)],
-            [shifted!(Semicolon), shifted!(Kc5), k!(Slash), shifted!(Kc8), k!(Minus), shifted!(Equal), a!(Transparent), shifted!(Kc6), a!(Transparent), a!(Transparent), k!(Equal)],
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No)],
+            [shifted!(Comma), shifted!(Kc9), shifted!(LeftBracket), k!(LeftBracket), shifted!(Quote), a!(Transparent), k!(Quote), k!(RightBracket), shifted!(RightBracket), shifted!(Kc0), shifted!(Dot)],
+            [shifted!(Kc5), k!(Slash), shifted!(Kc8), k!(Minus), shifted!(Equal), a!(Transparent), shifted!(Kc6), a!(Transparent), a!(Transparent), k!(Equal), shifted!(Semicolon)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), shifted!(Kc4), shifted!(Kc5), a!(No)],
         ],
         [
             [k!(F5), k!(F4), k!(F3), k!(F2), k!(F1), a!(No), k!(F10), k!(F9), k!(F8), k!(F7), k!(F6)],
-            [k!(Left), a!(No), shifted!(Backslash), shifted!(Kc7), shifted!(Kc1), shifted!(Kc6), a!(Transparent), shifted!(Kc4), k!(Right), k!(Up), k!(Down)],
-            [a!(Transparent), a!(Transparent), shifted!(Kc3), k!(Grave), shifted!(Grave), wm!(S, GUI_SHIFT), a!(Transparent), k!(Backslash), a!(Transparent), shifted!(Kc2), k!(Equal)],
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No)],
+            [k!(Down), shifted!(Backslash), shifted!(Kc7), shifted!(Kc1), shifted!(Kc6), a!(Transparent), shifted!(Kc4), k!(Right), k!(Up), k!(Down), k!(Left)],
+            [a!(Transparent), shifted!(Kc3), wm!(S, GUI_SHIFT), k!(Grave), shifted!(Grave), user!(5), a!(Transparent), k!(Backslash), shifted!(Kc2), k!(Equal), a!(Transparent)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), k!(F4), k!(F5), a!(No)],
         ],
         [
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent)],
