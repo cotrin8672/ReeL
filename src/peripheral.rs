@@ -11,9 +11,9 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{RNG, SPI3, USBD};
+use embassy_nrf::peripherals::{QDEC, RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
-use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
+use embassy_nrf::{bind_interrupts, qdec, rng, saadc, spim, usb};
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use nrf_mpsl::Flash;
@@ -44,6 +44,7 @@ use xiao_battery::{
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
     RNG => rng::InterruptHandler<RNG>;
+    QDEC => qdec::InterruptHandler<QDEC>;
     EGU0_SWI0 => nrf_sdc::mpsl::LowPrioInterruptHandler;
     CLOCK_POWER => nrf_sdc::mpsl::ClockInterruptHandler, usb::vbus_detect::InterruptHandler;
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
@@ -89,38 +90,28 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// Read one event per mechanical detent from phase A.
+/// Read one event per mechanical detent from the hardware quadrature decoder.
 ///
-/// Phase B must be sampled immediately when A changes. Delaying that sample
-/// until after debounce lets B reach the next stable state and destroys the
-/// direction information. Waiting on both pins with `select` is also unsafe
-/// here because completing one wait cancels the other and can discard the
-/// closely following quadrature edge.
-struct LeftRotaryEncoder {
-    pin_a: Input<'static>,
-    pin_b: Input<'static>,
-    a_low: bool,
+/// The encoder has nine electrical cycles per revolution and the current
+/// hardware observation is 18 mechanical detents per revolution. Keep the
+/// resulting two valid quadrature transitions per detent as a firmware
+/// parameter; the pulse count alone does not establish the detent count.
+struct LeftRotaryEncoder<'d> {
+    qdec: qdec::Qdec<'d>,
+    transition_remainder: i16,
 }
 
-impl LeftRotaryEncoder {
-    fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
+const ENCODER_TRANSITIONS_PER_DETENT: i16 = 2;
+
+impl<'d> LeftRotaryEncoder<'d> {
+    fn new(qdec: qdec::Qdec<'d>) -> Self {
         Self {
-            a_low: pin_a.is_low(),
-            pin_a,
-            pin_b,
-        }
-    }
-
-    fn direction_at_a_edge(&self, a_low: bool) -> Direction {
-        if a_low != self.pin_b.is_low() {
-            Direction::Clockwise
-        } else {
-            Direction::CounterClockwise
+            qdec,
+            transition_remainder: 0,
         }
     }
 }
 
-const ENCODER_DEBOUNCE_MS: u64 = 3;
 const ENCODER_EVENT_QUEUE_SIZE: usize = 64;
 static ENCODER_DIRECTION_CHANNEL: Channel<RawMutex, Direction, ENCODER_EVENT_QUEUE_SIZE> =
     Channel::new();
@@ -137,27 +128,23 @@ async fn encoder_event_task() -> ! {
     }
 }
 
-impl Runnable for LeftRotaryEncoder {
+impl<'d> Runnable for LeftRotaryEncoder<'d> {
     async fn run(&mut self) -> ! {
         loop {
-            self.pin_a.wait_for_any_edge().await;
+            self.transition_remainder += self.qdec.read().await;
 
-            let edge_a_low = self.pin_a.is_low();
-            if edge_a_low == self.a_low {
-                continue;
+            while self.transition_remainder >= ENCODER_TRANSITIONS_PER_DETENT {
+                self.transition_remainder -= ENCODER_TRANSITIONS_PER_DETENT;
+                // Preserve the existing A/B polarity used by the custom
+                // decoder: a positive QDEC count is counter-clockwise.
+                ENCODER_DIRECTION_CHANNEL
+                    .send(Direction::CounterClockwise)
+                    .await;
             }
 
-            // Capture direction before debounce. B may legitimately change
-            // during the debounce interval as the encoder reaches its detent.
-            let direction = self.direction_at_a_edge(edge_a_low);
-
-            Timer::after_millis(ENCODER_DEBOUNCE_MS).await;
-            let settled_a_low = self.pin_a.is_low();
-            self.a_low = settled_a_low;
-
-            // A transition that did not remain stable was contact bounce.
-            if settled_a_low == edge_a_low {
-                ENCODER_DIRECTION_CHANNEL.send(direction).await;
+            while self.transition_remainder <= -ENCODER_TRANSITIONS_PER_DETENT {
+                self.transition_remainder += ENCODER_TRANSITIONS_PER_DETENT;
+                ENCODER_DIRECTION_CHANNEL.send(Direction::Clockwise).await;
             }
         }
     }
@@ -236,9 +223,8 @@ async fn main(spawner: Spawner) {
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
-    let encoder_a = Input::new(p.P1_14, Pull::Up);
-    let encoder_b = Input::new(p.P1_15, Pull::Up);
-    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
+    let encoder_qdec = qdec::Qdec::new(p.QDEC, Irqs, p.P1_14, p.P1_15, qdec::Config::default());
+    let mut encoder = LeftRotaryEncoder::new(encoder_qdec);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
