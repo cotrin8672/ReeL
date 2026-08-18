@@ -96,7 +96,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         }
     }
 
-    fn take_report_event(&mut self) -> Option<PointingEvent> {
+    fn take_report_event(&mut self, flush_smoother: bool) -> Option<PointingEvent> {
         if self.accumulated_x == 0 && self.accumulated_y == 0 && !self.smoother.has_pending() {
             return None;
         }
@@ -109,6 +109,17 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         let (x, y) = self.transform.apply(raw_x, raw_y, current_matrix());
         let (x, y) = self.gain.apply(x, y);
         let (x, y) = self.smoother.apply(x, y);
+        let (tail_x, tail_y) = if flush_smoother {
+            self.smoother.flush()
+        } else {
+            (0, 0)
+        };
+        let x = i32::from(x)
+            .saturating_add(i32::from(tail_x))
+            .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+        let y = i32::from(y)
+            .saturating_add(i32::from(tail_y))
+            .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
 
         if x == 0 && y == 0 {
             return None;
@@ -178,10 +189,20 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
                 Either::First(_) => {
                     self.poll_once().await;
                     self.last_poll = Instant::now();
+
+                    // PMW3610 deasserts MOTION after the final burst read. Do
+                    // not wait for the next 125 Hz report tick: flush the
+                    // accumulated motion and smoother tail immediately.
+                    if !self.sensor.motion_pending() {
+                        self.last_report = Instant::now();
+                        if let Some(event) = self.take_report_event(true) {
+                            return event;
+                        }
+                    }
                 }
                 Either::Second(_) => {
                     self.last_report = Instant::now();
-                    if let Some(event) = self.take_report_event() {
+                    if let Some(event) = self.take_report_event(false) {
                         return event;
                     }
                 }

@@ -31,6 +31,22 @@ impl MotionSmoother {
         self.x_state != 0 || self.y_state != 0
     }
 
+    pub fn flush(&mut self) -> (i16, i16) {
+        let mut x = 0_i32;
+        let mut y = 0_i32;
+
+        while self.has_pending() {
+            let (dx, dy) = self.apply(0, 0);
+            x = x.saturating_add(i32::from(dx));
+            y = y.saturating_add(i32::from(dy));
+        }
+
+        (
+            x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16,
+            y.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16,
+        )
+    }
+
     pub fn apply(&mut self, x: i16, y: i16) -> (i16, i16) {
         let motion = u32::from(x.unsigned_abs()).saturating_add(u32::from(y.unsigned_abs()));
         if motion >= BYPASS_MOTION_THRESHOLD {
@@ -79,13 +95,10 @@ mod tests {
         let first = smoother.apply(3, 0).0;
         output += i32::from(first);
         assert!(smoother.has_pending());
-        for _ in 0..16 {
-            output += i32::from(smoother.apply(0, 0).0);
-            if !smoother.has_pending() {
-                break;
-            }
-        }
+        let (tail_x, tail_y) = smoother.flush();
+        output += i32::from(tail_x);
         assert!(!smoother.has_pending());
+        assert_eq!(tail_y, 0);
         assert!((2..=3).contains(&output));
     }
 

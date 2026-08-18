@@ -1,8 +1,9 @@
 const GAIN_SCALE: i32 = 256;
 
 /// Independent sensitivity control. The default is unity; the intentional
-/// 800-CPI sensor setting is not changed by this feature.
-pub const TRACKBALL_GAIN_NUMERATOR: i32 = GAIN_SCALE;
+/// 1600-CPI sensor setting is paired with half gain to retain sub-count motion
+/// while keeping the overall sensitivity near the previous 800-CPI baseline.
+pub const TRACKBALL_GAIN_NUMERATOR: i32 = GAIN_SCALE / 2;
 
 #[derive(Default)]
 pub struct MotionGain {
@@ -55,8 +56,15 @@ mod tests {
     }
 
     #[test]
-    fn default_gain_is_unity() {
+    fn default_gain_is_half() {
         let mut gain = MotionGain::new();
-        assert_eq!(gain.apply(12, -7), (12, -7));
+        assert_eq!(gain.apply(12, -7), (6, -3));
+    }
+
+    #[test]
+    fn default_gain_retains_half_count_motion() {
+        let mut gain = MotionGain::new();
+        assert_eq!(gain.apply(1, 0), (0, 0));
+        assert_eq!(gain.apply(1, 0), (1, 0));
     }
 }
