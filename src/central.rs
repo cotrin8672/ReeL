@@ -133,6 +133,7 @@ async fn main(spawner: Spawner) {
     info!("Starting ReeL right (RMK central)");
 
     let mut nrf_config = embassy_nrf::config::Config::default();
+    nrf_config.lfclk_source = embassy_nrf::config::LfclkSource::ExternalXtal;
     nrf_config.dcdc.reg0_voltage = Some(embassy_nrf::config::Reg0Voltage::_3V3);
     nrf_config.dcdc.reg0 = true;
     nrf_config.dcdc.reg1 = true;
