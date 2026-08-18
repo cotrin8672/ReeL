@@ -8,7 +8,6 @@ use rmk::macros::input_device;
 
 use crate::calibration_config::current_matrix;
 use crate::motion_gain::MotionGain;
-use crate::motion_smoother::MotionSmoother;
 use crate::trackball_transform::TrackballTransform;
 
 #[input_device(publish = PointingEvent)]
@@ -22,9 +21,10 @@ pub struct TransformingPointingDevice<S: PointingDriver> {
     last_report: Instant,
     accumulated_x: i32,
     accumulated_y: i32,
+    pending_report_x: i32,
+    pending_report_y: i32,
     transform: TrackballTransform,
     gain: MotionGain,
-    smoother: MotionSmoother,
 }
 
 impl<S: PointingDriver> TransformingPointingDevice<S> {
@@ -45,9 +45,10 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             last_report: Instant::MIN,
             accumulated_x: 0,
             accumulated_y: 0,
+            pending_report_x: 0,
+            pending_report_y: 0,
             transform: TrackballTransform::new(),
             gain: MotionGain::new(),
-            smoother: MotionSmoother::new(),
         }
     }
 
@@ -96,34 +97,33 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         }
     }
 
-    fn take_report_event(&mut self, flush_smoother: bool) -> Option<PointingEvent> {
-        if self.accumulated_x == 0 && self.accumulated_y == 0 && !self.smoother.has_pending() {
+    fn take_report_event(&mut self) -> Option<PointingEvent> {
+        if self.pending_report_x == 0 && self.pending_report_y == 0 {
+            if self.accumulated_x == 0 && self.accumulated_y == 0 {
+                return None;
+            }
+
+            // Keep any raw motion beyond i16 until a later report. The
+            // transform is defined for one i16 motion vector at a time, so
+            // split only at this boundary instead of discarding the excess.
+            let raw_x = take_i16_chunk(&mut self.accumulated_x);
+            let raw_y = take_i16_chunk(&mut self.accumulated_y);
+
+            let (x, y) = self.transform.apply(raw_x, raw_y, current_matrix());
+            let (x, y) = self.gain.apply(x, y);
+            self.pending_report_x = i32::from(x);
+            self.pending_report_y = i32::from(y);
+        }
+
+        if self.pending_report_x == 0 && self.pending_report_y == 0 {
             return None;
         }
 
-        let raw_x = self.accumulated_x.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-        let raw_y = self.accumulated_y.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-        self.accumulated_x = 0;
-        self.accumulated_y = 0;
-
-        let (x, y) = self.transform.apply(raw_x, raw_y, current_matrix());
-        let (x, y) = self.gain.apply(x, y);
-        let (x, y) = self.smoother.apply(x, y);
-        let (tail_x, tail_y) = if flush_smoother {
-            self.smoother.flush()
-        } else {
-            (0, 0)
-        };
-        let x = i32::from(x)
-            .saturating_add(i32::from(tail_x))
-            .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
-        let y = i32::from(y)
-            .saturating_add(i32::from(tail_y))
-            .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
-
-        if x == 0 && y == 0 {
-            return None;
-        }
+        // RMK's MouseReport uses i8 relative axes. Emit a bounded chunk and
+        // retain the remainder so fast motion is represented by later HID
+        // reports rather than being clamped away.
+        let x = take_i8_chunk(&mut self.pending_report_x);
+        let y = take_i8_chunk(&mut self.pending_report_y);
 
         Some(PointingEvent {
             device_id: self.id,
@@ -131,12 +131,12 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
                 AxisEvent {
                     typ: AxisValType::Rel,
                     axis: Axis::X,
-                    value: x,
+                    value: i16::from(x),
                 },
                 AxisEvent {
                     typ: AxisValType::Rel,
                     axis: Axis::Y,
-                    value: y,
+                    value: i16::from(y),
                 },
                 AxisEvent {
                     typ: AxisValType::Rel,
@@ -145,6 +145,13 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
                 },
             ],
         })
+    }
+
+    fn has_report_data(&self) -> bool {
+        self.accumulated_x != 0
+            || self.accumulated_y != 0
+            || self.pending_report_x != 0
+            || self.pending_report_y != 0
     }
 
     async fn read_pointing_event(&mut self) -> PointingEvent {
@@ -158,6 +165,29 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         }
 
         loop {
+            // Check the deadline before waiting for another sensor edge. This
+            // is also the tie-breaker when MOTION remains asserted and both
+            // futures are ready.
+            if self.has_report_data() && self.last_report.elapsed() >= self.report_interval {
+                self.last_report = Instant::now();
+                if let Some(event) = self.take_report_event() {
+                    return event;
+                }
+            }
+
+            let has_report_data = self.has_report_data();
+            let report_delay = self
+                .report_interval
+                .checked_sub(self.last_report.elapsed())
+                .unwrap_or(Duration::MIN);
+            let report_wait = async move {
+                if has_report_data {
+                    Timer::after(report_delay).await;
+                } else {
+                    pending::<()>().await;
+                }
+            };
+
             let poll_wait = async {
                 if let Some(gpio) = self.sensor.motion_gpio() {
                     let _ = gpio.wait_for_low().await;
@@ -171,42 +201,32 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
                 }
             };
 
-            let report_wait = async {
-                if self.accumulated_x != 0 || self.accumulated_y != 0 || self.smoother.has_pending()
-                {
-                    Timer::after(
-                        self.report_interval
-                            .checked_sub(self.last_report.elapsed())
-                            .unwrap_or(Duration::MIN),
-                    )
-                    .await;
-                } else {
-                    pending::<()>().await;
-                }
-            };
-
-            match select(poll_wait, report_wait).await {
+            // embassy-futures::select polls its first future first, so the
+            // report deadline must be the first future here.
+            match select(report_wait, poll_wait).await {
                 Either::First(_) => {
-                    self.poll_once().await;
-                    self.last_poll = Instant::now();
-
-                    // PMW3610 deasserts MOTION after the final burst read. Do
-                    // not wait for the next 125 Hz report tick: flush the
-                    // accumulated motion and smoother tail immediately.
-                    if !self.sensor.motion_pending() {
-                        self.last_report = Instant::now();
-                        if let Some(event) = self.take_report_event(true) {
-                            return event;
-                        }
+                    self.last_report = Instant::now();
+                    if let Some(event) = self.take_report_event() {
+                        return event;
                     }
                 }
                 Either::Second(_) => {
-                    self.last_report = Instant::now();
-                    if let Some(event) = self.take_report_event(false) {
-                        return event;
-                    }
+                    self.poll_once().await;
+                    self.last_poll = Instant::now();
                 }
             }
         }
     }
+}
+
+fn take_i16_chunk(value: &mut i32) -> i16 {
+    let chunk = (*value).clamp(i32::from(i16::MIN), i32::from(i16::MAX));
+    *value -= chunk;
+    chunk as i16
+}
+
+fn take_i8_chunk(value: &mut i32) -> i8 {
+    let chunk = (*value).clamp(i32::from(i8::MIN), i32::from(i8::MAX));
+    *value -= chunk;
+    chunk as i8
 }
