@@ -101,7 +101,7 @@ struct LeftRotaryEncoder<'d> {
     transition_remainder: i16,
 }
 
-const ENCODER_TRANSITIONS_PER_DETENT: i16 = 2;
+const ENCODER_TRANSITIONS_PER_DETENT: i16 = 1;
 
 impl<'d> LeftRotaryEncoder<'d> {
     fn new(qdec: qdec::Qdec<'d>) -> Self {
