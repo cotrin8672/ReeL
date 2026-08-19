@@ -89,36 +89,23 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// The BM4.0A01 has stable detents at `00` and `11`. Poll both phases as one
-/// logical AB state, use the quadrature transition table to accumulate half
-/// steps, and publish one event for every two valid half steps.
+/// Read one event per mechanical detent from phase A.
+///
+/// The measured encoder changes phase A once per detent. Phase B is sampled
+/// immediately at the A edge and is used only to determine direction.
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    previous_state: u8,
-    accumulator: i8,
+    last_a: bool,
 }
-
-const ENCODER_TRANSITIONS: [i8; 16] = [0, 1, -1, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, -1, 1, 0];
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
-        let previous_state = Self::read_state_from_pins(&pin_a, &pin_b);
-
         Self {
+            last_a: pin_a.is_high(),
             pin_a,
             pin_b,
-            previous_state,
-            accumulator: 0,
         }
-    }
-
-    fn read_state_from_pins(pin_a: &Input<'static>, pin_b: &Input<'static>) -> u8 {
-        ((pin_a.is_high() as u8) << 1) | (pin_b.is_high() as u8)
-    }
-
-    fn read_state(&self) -> u8 {
-        Self::read_state_from_pins(&self.pin_a, &self.pin_b)
     }
 }
 
@@ -131,7 +118,8 @@ async fn encoder_event_task() -> ! {
     loop {
         let direction = ENCODER_DIRECTION_CHANNEL.receive().await;
         publish_event_async(KeyboardEvent::rotary_encoder(0, direction, true)).await;
-        // Keep the tap visible to the split transport.
+        // Keep the tap visible to the split transport while edge capture keeps
+        // running independently in LeftRotaryEncoder::run.
         Timer::after_millis(5).await;
         publish_event_async(KeyboardEvent::rotary_encoder(0, direction, false)).await;
     }
@@ -140,35 +128,30 @@ async fn encoder_event_task() -> ! {
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            Timer::after_millis(1).await;
+            self.pin_a.wait_for_any_edge().await;
 
-            let current_state = self.read_state();
-            if current_state == self.previous_state {
+            let a = self.pin_a.is_high();
+            let b = self.pin_b.is_high();
+
+            // Ignore an interrupt that did not result in an A state change.
+            if a == self.last_a {
                 continue;
             }
 
-            let index = ((self.previous_state << 2) | current_state) as usize;
-            let delta = ENCODER_TRANSITIONS[index];
-            self.previous_state = current_state;
+            // Preserve the existing A/B polarity used by the old custom
+            // decoder: equal levels are counter-clockwise.
+            let direction = if a == b {
+                Direction::CounterClockwise
+            } else {
+                Direction::Clockwise
+            };
 
-            if delta == 0 {
-                // An invalid or missed two-phase transition is not assigned a
-                // direction. Start accumulating again from the observed state.
-                self.accumulator = 0;
-                continue;
-            }
+            // Confirm that the A edge remained stable before publishing it.
+            Timer::after_millis(2).await;
+            let settled_a = self.pin_a.is_high();
 
-            self.accumulator += delta;
-
-            if (current_state == 0b00 || current_state == 0b11)
-                && (self.accumulator >= 2 || self.accumulator <= -2)
-            {
-                let direction = if self.accumulator >= 2 {
-                    Direction::CounterClockwise
-                } else {
-                    Direction::Clockwise
-                };
-                self.accumulator = 0;
+            if settled_a == a {
+                self.last_a = a;
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }
