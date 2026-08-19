@@ -191,11 +191,40 @@ impl Runnable for SharpVcomRunner {
 
 pub struct ReelStatusRenderer {
     central: bool,
+    last_snapshot: Option<StatusSnapshot>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct StatusSnapshot {
+    battery_level: Option<u8>,
+    battery_charging: bool,
+    split_connected: bool,
+    layer: u8,
+    profile: u8,
+}
+
+impl StatusSnapshot {
+    fn from_context(ctx: &RenderContext, central: bool) -> Self {
+        Self {
+            battery_level: battery_level(ctx.battery.0),
+            battery_charging: battery_is_charging(ctx.battery.0),
+            split_connected: if central {
+                ctx.peripherals_connected.first().copied().unwrap_or(false)
+            } else {
+                ctx.central_connected
+            },
+            layer: ctx.layer.min(3),
+            profile: ctx.ble_status.profile.min(4),
+        }
+    }
 }
 
 impl ReelStatusRenderer {
     fn new(central: bool) -> Self {
-        Self { central }
+        Self {
+            central,
+            last_snapshot: None,
+        }
     }
 }
 
@@ -403,22 +432,20 @@ where
 
 impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
+        let snapshot = StatusSnapshot::from_context(ctx, self.central);
+        if self.last_snapshot == Some(snapshot) {
+            return;
+        }
+
         let _ = display.clear(BinaryColor::Off);
         draw_base(display);
 
-        draw_battery(
-            display,
-            battery_level(ctx.battery.0),
-            battery_is_charging(ctx.battery.0),
-        );
-        let split_connected = if self.central {
-            ctx.peripherals_connected.first().copied().unwrap_or(false)
-        } else {
-            ctx.central_connected
-        };
-        draw_split_connection(display, split_connected);
-        draw_active_layer(display, ctx.layer);
-        draw_profiles(display, ctx.ble_status.profile);
+        draw_battery(display, snapshot.battery_level, snapshot.battery_charging);
+        draw_split_connection(display, snapshot.split_connected);
+        draw_active_layer(display, snapshot.layer);
+        draw_profiles(display, snapshot.profile);
+
+        self.last_snapshot = Some(snapshot);
     }
 }
 
