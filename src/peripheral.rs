@@ -1,6 +1,8 @@
 #![no_main]
 #![no_std]
 
+use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+
 #[macro_use]
 mod macros;
 mod sharp_lcd;
@@ -10,6 +12,7 @@ use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
+use embassy_nrf::gpiote::{InputChannel, InputChannelPolarity};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
@@ -89,22 +92,218 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// Read one event per mechanical detent from phase A.
+/// Decode one event per mechanical detent from both encoder phases.
 ///
-/// The measured encoder changes phase A once per detent. Phase B is sampled
-/// immediately at the A edge and is used only to determine direction.
+/// The measured encoder alternates stable `00` and `11` states at its detents.
+/// Track the intermediate state so direction comes from the transition order,
+/// rather than from a phase-B snapshot taken after a phase-A interrupt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EncoderPhase {
+    A,
+    B,
+}
+
+#[derive(Clone, Copy)]
+struct EncoderEdge {
+    phase: EncoderPhase,
+    high: bool,
+    sequence: u32,
+}
+
+const ENCODER_EDGE_QUEUE_SIZE: usize = 64;
+static ENCODER_EDGE_CHANNEL: Channel<RawMutex, EncoderEdge, ENCODER_EDGE_QUEUE_SIZE> =
+    Channel::new();
+static ENCODER_PIN_STATE: AtomicU8 = AtomicU8::new(0);
+static ENCODER_EDGE_SEQUENCE: AtomicU32 = AtomicU32::new(0);
+
+fn capture_encoder_edge(phase: EncoderPhase, high: bool) -> EncoderEdge {
+    let bit = match phase {
+        EncoderPhase::A => 0b10,
+        EncoderPhase::B => 0b01,
+    };
+
+    if high {
+        ENCODER_PIN_STATE.fetch_or(bit, Ordering::AcqRel);
+    } else {
+        ENCODER_PIN_STATE.fetch_and(!bit, Ordering::AcqRel);
+    }
+
+    let sequence = ENCODER_EDGE_SEQUENCE
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1);
+
+    EncoderEdge {
+        phase,
+        high,
+        sequence,
+    }
+}
+
+#[embassy_executor::task]
+async fn encoder_a_edge_task(mut input: InputChannel<'static>) -> ! {
+    loop {
+        input.wait().await;
+        ENCODER_EDGE_CHANNEL
+            .send(capture_encoder_edge(EncoderPhase::A, input.pin().is_high()))
+            .await;
+    }
+}
+
+#[embassy_executor::task]
+async fn encoder_b_edge_task(mut input: InputChannel<'static>) -> ! {
+    loop {
+        input.wait().await;
+        ENCODER_EDGE_CHANNEL
+            .send(capture_encoder_edge(EncoderPhase::B, input.pin().is_high()))
+            .await;
+    }
+}
+
+struct PendingDetent {
+    target: u8,
+    direction: Direction,
+    sequence: u32,
+}
+
 struct LeftRotaryEncoder {
-    pin_a: Input<'static>,
-    pin_b: Input<'static>,
-    last_a: bool,
+    /// AB is encoded as A in bit 1 and B in bit 0.
+    state: u8,
+    stable_detent: Option<u8>,
+    first_phase: Option<EncoderPhase>,
 }
 
 impl LeftRotaryEncoder {
-    fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
+    fn new(a_high: bool, b_high: bool) -> Self {
+        let state = Self::encode_state(a_high, b_high);
         Self {
-            last_a: pin_a.is_high(),
-            pin_a,
-            pin_b,
+            state,
+            stable_detent: match state {
+                0b00 | 0b11 => Some(state),
+                _ => None,
+            },
+            first_phase: None,
+        }
+    }
+
+    const fn encode_state(a_high: bool, b_high: bool) -> u8 {
+        ((a_high as u8) << 1) | (b_high as u8)
+    }
+
+    fn update(&mut self, edge: EncoderEdge) -> Option<PendingDetent> {
+        let bit = match edge.phase {
+            EncoderPhase::A => 0b10,
+            EncoderPhase::B => 0b01,
+        };
+        let next_state = if edge.high {
+            self.state | bit
+        } else {
+            self.state & !bit
+        };
+
+        if next_state == self.state {
+            return None;
+        }
+
+        let previous_state = self.state;
+        self.state = next_state;
+
+        match (previous_state, next_state) {
+            // From 00 or 11, remember which phase moved first.
+            (0b00, 0b01) | (0b11, 0b10) => {
+                self.first_phase = Some(EncoderPhase::B);
+                None
+            }
+            (0b00, 0b10) | (0b11, 0b01) => {
+                self.first_phase = Some(EncoderPhase::A);
+                None
+            }
+
+            // Reaching the opposite stable state creates a candidate. It is
+            // emitted only after the candidate survives the stable-detent
+            // check in run().
+            (0b01, 0b11) => self.complete_detent(
+                0b00,
+                0b11,
+                Some((EncoderPhase::B, Direction::CounterClockwise)),
+                edge.sequence,
+            ),
+            (0b10, 0b11) => self.complete_detent(
+                0b00,
+                0b11,
+                Some((EncoderPhase::A, Direction::Clockwise)),
+                edge.sequence,
+            ),
+            (0b10, 0b00) => self.complete_detent(
+                0b11,
+                0b00,
+                Some((EncoderPhase::B, Direction::CounterClockwise)),
+                edge.sequence,
+            ),
+            (0b01, 0b00) => self.complete_detent(
+                0b11,
+                0b00,
+                Some((EncoderPhase::A, Direction::Clockwise)),
+                edge.sequence,
+            ),
+
+            // An impossible two-phase jump or an invalid intermediate step
+            // is discarded and resynchronizes on the next stable detent.
+            _ => {
+                self.first_phase = None;
+                None
+            }
+        }
+    }
+
+    fn complete_detent(
+        &mut self,
+        from: u8,
+        target: u8,
+        path: Option<(EncoderPhase, Direction)>,
+        sequence: u32,
+    ) -> Option<PendingDetent> {
+        let pending = if self.stable_detent == Some(target) {
+            None
+        } else if self.stable_detent == Some(from)
+            && path.is_some_and(|(phase, _)| self.first_phase == Some(phase))
+        {
+            path.map(|(_, direction)| PendingDetent {
+                target,
+                direction,
+                sequence,
+            })
+        } else {
+            None
+        };
+
+        self.first_phase = None;
+        if pending.is_none() {
+            // A stable state reached through an invalid or bouncing path is
+            // still a useful synchronization point, but it must not emit an
+            // event.
+            self.stable_detent = Some(target);
+        }
+        pending
+    }
+
+    fn confirm_detent(&mut self, pending: PendingDetent) -> Option<Direction> {
+        let sequence_unchanged = ENCODER_EDGE_SEQUENCE.load(Ordering::Acquire) == pending.sequence;
+        let state_is_stable = ENCODER_PIN_STATE.load(Ordering::Acquire) == pending.target;
+
+        if sequence_unchanged && state_is_stable {
+            self.stable_detent = Some(pending.target);
+            Some(pending.direction)
+        } else {
+            // Do not count a detent that was followed by another captured
+            // edge during the debounce interval. Re-synchronize to the
+            // latest captured stable state before consuming queued edges.
+            let state = ENCODER_PIN_STATE.load(Ordering::Acquire);
+            self.stable_detent = match state {
+                0b00 | 0b11 => Some(state),
+                _ => None,
+            };
+            self.first_phase = None;
+            None
         }
     }
 }
@@ -128,31 +327,12 @@ async fn encoder_event_task() -> ! {
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            self.pin_a.wait_for_any_edge().await;
-
-            let a = self.pin_a.is_high();
-            let b = self.pin_b.is_high();
-
-            // Ignore an interrupt that did not result in an A state change.
-            if a == self.last_a {
-                continue;
-            }
-
-            // Preserve the existing A/B polarity used by the old custom
-            // decoder: equal levels are counter-clockwise.
-            let direction = if a == b {
-                Direction::CounterClockwise
-            } else {
-                Direction::Clockwise
-            };
-
-            // Confirm that the A edge remained stable before publishing it.
-            Timer::after_millis(2).await;
-            let settled_a = self.pin_a.is_high();
-
-            if settled_a == a {
-                self.last_a = a;
-                ENCODER_DIRECTION_CHANNEL.send(direction).await;
+            let edge = ENCODER_EDGE_CHANNEL.receive().await;
+            if let Some(pending) = self.update(edge) {
+                Timer::after_millis(2).await;
+                if let Some(direction) = self.confirm_detent(pending) {
+                    ENCODER_DIRECTION_CHANNEL.send(direction).await;
+                }
             }
         }
     }
@@ -231,9 +411,28 @@ async fn main(spawner: Spawner) {
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
-    let encoder_a = Input::new(p.P1_14, Pull::Up);
-    let encoder_b = Input::new(p.P1_15, Pull::Up);
-    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
+    let encoder_a = InputChannel::new(
+        p.GPIOTE_CH0,
+        p.P1_14,
+        Pull::Up,
+        InputChannelPolarity::Toggle,
+    );
+    let encoder_b = InputChannel::new(
+        p.GPIOTE_CH1,
+        p.P1_15,
+        Pull::Up,
+        InputChannelPolarity::Toggle,
+    );
+    let encoder_a_high = encoder_a.pin().is_high();
+    let encoder_b_high = encoder_b.pin().is_high();
+    ENCODER_PIN_STATE.store(
+        LeftRotaryEncoder::encode_state(encoder_a_high, encoder_b_high),
+        Ordering::Release,
+    );
+    ENCODER_EDGE_SEQUENCE.store(0, Ordering::Release);
+    let mut encoder = LeftRotaryEncoder::new(encoder_a_high, encoder_b_high);
+    spawner.spawn(encoder_a_edge_task(encoder_a).unwrap());
+    spawner.spawn(encoder_b_edge_task(encoder_b).unwrap());
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
