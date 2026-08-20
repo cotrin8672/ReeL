@@ -3,18 +3,22 @@
 
 #[macro_use]
 mod macros;
-mod rotary_accumulator;
+mod rotary_decoder;
 mod sharp_lcd;
 mod xiao_battery;
+
+use core::cmp::Ordering;
 
 use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
+use embassy_nrf::gpiote::{InputChannel, InputChannelPolarity};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{QDEC, RNG, SPI3, USBD};
+use embassy_nrf::peripherals::{RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
-use embassy_nrf::{bind_interrupts, qdec, rng, saadc, spim, usb};
+use embassy_nrf::timer::{Cc, Timer as HardwareTimer};
+use embassy_nrf::{bind_interrupts, ppi, rng, saadc, spim, usb};
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use nrf_mpsl::Flash;
@@ -37,7 +41,7 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
-use rotary_accumulator::DetentAccumulator;
+use rotary_decoder::{DetentDirection, EncoderPhase, HalfStepDecoder};
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -46,7 +50,6 @@ use xiao_battery::{
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
     RNG => rng::InterruptHandler<RNG>;
-    QDEC => qdec::InterruptHandler<QDEC>;
     EGU0_SWI0 => nrf_sdc::mpsl::LowPrioInterruptHandler;
     CLOCK_POWER => nrf_sdc::mpsl::ClockInterruptHandler, usb::vbus_detect::InterruptHandler;
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
@@ -90,27 +93,71 @@ fn ble_addr() -> [u8; 6] {
     unwrap!(addr.to_le_bytes()[..6].try_into())
 }
 
-/// Rotary encoder reader for the left half.
-///
-/// Decode both BM4.0A01 phases continuously with the nRF52840 QDEC peripheral.
-///
-/// The encoder has nine electrical pulses and 18 measured detents per
-/// revolution. QDEC reports four state transitions per pulse, so two raw
-/// counts make one mechanical detent. Hardware capture continues while this
-/// task sleeps or publishes a completed detent.
-struct LeftRotaryEncoder<'d> {
-    qdec: qdec::Qdec<'d>,
-    accumulator: DetentAccumulator,
+#[derive(Clone, Copy)]
+struct EncoderEdge {
+    phase: EncoderPhase,
+    high: bool,
+    timestamp: u32,
 }
 
-const ENCODER_COUNTS_PER_DETENT: i16 = 2;
-const ENCODER_READ_INTERVAL_MS: u64 = 1;
+const ENCODER_EDGE_QUEUE_SIZE: usize = 64;
+const ENCODER_EDGE_BATCH_SIZE: usize = 16;
+const ENCODER_EDGE_BATCH_US: u64 = 500;
+static ENCODER_EDGE_CHANNEL: Channel<RawMutex, EncoderEdge, ENCODER_EDGE_QUEUE_SIZE> =
+    Channel::new();
 
-impl<'d> LeftRotaryEncoder<'d> {
-    fn new(qdec: qdec::Qdec<'d>) -> Self {
+#[embassy_executor::task]
+async fn encoder_a_edge_task(mut input: InputChannel<'static>, capture: Cc<'static>) -> ! {
+    loop {
+        input.wait().await;
+        ENCODER_EDGE_CHANNEL
+            .send(EncoderEdge {
+                phase: EncoderPhase::A,
+                high: input.pin().is_high(),
+                timestamp: capture.read(),
+            })
+            .await;
+    }
+}
+
+#[embassy_executor::task]
+async fn encoder_b_edge_task(mut input: InputChannel<'static>, capture: Cc<'static>) -> ! {
+    loop {
+        input.wait().await;
+        ENCODER_EDGE_CHANNEL
+            .send(EncoderEdge {
+                phase: EncoderPhase::B,
+                high: input.pin().is_high(),
+                timestamp: capture.read(),
+            })
+            .await;
+    }
+}
+
+fn compare_edge_timestamps(left: &EncoderEdge, right: &EncoderEdge) -> Ordering {
+    let difference = left.timestamp.wrapping_sub(right.timestamp);
+    if difference == 0 {
+        Ordering::Equal
+    } else if difference < (1 << 31) {
+        Ordering::Greater
+    } else {
+        Ordering::Less
+    }
+}
+
+/// Decode timestamped A/B edges into one event at each mechanical half-step.
+///
+/// GPIOTE keeps capturing while this task batches or publishes events. PPI
+/// timestamps preserve the physical A/B order even if both edge tasks wake
+/// after a BLE radio timeslot.
+struct LeftRotaryEncoder {
+    decoder: HalfStepDecoder,
+}
+
+impl LeftRotaryEncoder {
+    fn new(a_high: bool, b_high: bool) -> Self {
         Self {
-            qdec,
-            accumulator: DetentAccumulator::new(ENCODER_COUNTS_PER_DETENT),
+            decoder: HalfStepDecoder::new(a_high, b_high),
         }
     }
 }
@@ -131,18 +178,31 @@ async fn encoder_event_task() -> ! {
     }
 }
 
-impl<'d> Runnable for LeftRotaryEncoder<'d> {
+impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            Timer::after_millis(ENCODER_READ_INTERVAL_MS).await;
-            let detents = self.accumulator.push(self.qdec.read().await);
-            let direction = if detents > 0 {
-                Direction::CounterClockwise
-            } else {
-                Direction::Clockwise
-            };
+            let first_edge = ENCODER_EDGE_CHANNEL.receive().await;
+            Timer::after_micros(ENCODER_EDGE_BATCH_US).await;
 
-            for _ in 0..detents.unsigned_abs() {
+            let mut edges = [first_edge; ENCODER_EDGE_BATCH_SIZE];
+            let mut edge_count = 1;
+            while edge_count < ENCODER_EDGE_BATCH_SIZE {
+                let Ok(edge) = ENCODER_EDGE_CHANNEL.try_receive() else {
+                    break;
+                };
+                edges[edge_count] = edge;
+                edge_count += 1;
+            }
+            edges[..edge_count].sort_unstable_by(compare_edge_timestamps);
+
+            for edge in &edges[..edge_count] {
+                let Some(detent) = self.decoder.update(edge.phase, edge.high) else {
+                    continue;
+                };
+                let direction = match detent {
+                    DetentDirection::Positive => Direction::CounterClockwise,
+                    DetentDirection::Negative => Direction::Clockwise,
+                };
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }
@@ -222,11 +282,44 @@ async fn main(spawner: Spawner) {
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
-    let mut encoder_qdec_config = qdec::Config::default();
-    encoder_qdec_config.period = qdec::SamplePeriod::_128us;
-    encoder_qdec_config.debounce = true;
-    let encoder_qdec = qdec::Qdec::new(p.QDEC, Irqs, p.P1_14, p.P1_15, encoder_qdec_config);
-    let mut encoder = LeftRotaryEncoder::new(encoder_qdec);
+    let encoder_a = InputChannel::new(
+        p.GPIOTE_CH0,
+        p.P1_14,
+        Pull::Up,
+        InputChannelPolarity::Toggle,
+    );
+    let encoder_b = InputChannel::new(
+        p.GPIOTE_CH1,
+        p.P1_15,
+        Pull::Up,
+        InputChannelPolarity::Toggle,
+    );
+    let encoder_a_high = encoder_a.pin().is_high();
+    let encoder_b_high = encoder_b.pin().is_high();
+
+    let encoder_timer = HardwareTimer::new(p.TIMER1);
+    let encoder_a_capture = encoder_timer.cc(0);
+    let encoder_b_capture = encoder_timer.cc(1);
+    let mut encoder_a_ppi = ppi::Ppi::new_one_to_one(
+        p.PPI_CH0,
+        encoder_a.event_in(),
+        encoder_a_capture.task_capture(),
+    );
+    let mut encoder_b_ppi = ppi::Ppi::new_one_to_one(
+        p.PPI_CH1,
+        encoder_b.event_in(),
+        encoder_b_capture.task_capture(),
+    );
+    encoder_timer.start();
+    encoder_a_ppi.enable();
+    encoder_b_ppi.enable();
+    encoder_timer.persist();
+    encoder_a_ppi.persist();
+    encoder_b_ppi.persist();
+
+    spawner.spawn(encoder_a_edge_task(encoder_a, encoder_a_capture).unwrap());
+    spawner.spawn(encoder_b_edge_task(encoder_b, encoder_b_capture).unwrap());
+    let mut encoder = LeftRotaryEncoder::new(encoder_a_high, encoder_b_high);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
