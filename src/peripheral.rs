@@ -100,40 +100,6 @@ struct EncoderEdge {
     timestamp: u32,
 }
 
-const ENCODER_EDGE_QUEUE_SIZE: usize = 64;
-const ENCODER_EDGE_BATCH_SIZE: usize = 16;
-const ENCODER_EDGE_BATCH_US: u64 = 500;
-static ENCODER_EDGE_CHANNEL: Channel<RawMutex, EncoderEdge, ENCODER_EDGE_QUEUE_SIZE> =
-    Channel::new();
-
-#[embassy_executor::task]
-async fn encoder_a_edge_task(mut input: InputChannel<'static>, capture: Cc<'static>) -> ! {
-    loop {
-        input.wait().await;
-        ENCODER_EDGE_CHANNEL
-            .send(EncoderEdge {
-                phase: EncoderPhase::A,
-                high: input.pin().is_high(),
-                timestamp: capture.read(),
-            })
-            .await;
-    }
-}
-
-#[embassy_executor::task]
-async fn encoder_b_edge_task(mut input: InputChannel<'static>, capture: Cc<'static>) -> ! {
-    loop {
-        input.wait().await;
-        ENCODER_EDGE_CHANNEL
-            .send(EncoderEdge {
-                phase: EncoderPhase::B,
-                high: input.pin().is_high(),
-                timestamp: capture.read(),
-            })
-            .await;
-    }
-}
-
 fn compare_edge_timestamps(left: &EncoderEdge, right: &EncoderEdge) -> Ordering {
     let difference = left.timestamp.wrapping_sub(right.timestamp);
     if difference == 0 {
@@ -145,20 +111,136 @@ fn compare_edge_timestamps(left: &EncoderEdge, right: &EncoderEdge) -> Ordering 
     }
 }
 
-/// Decode timestamped A/B edges into one event at each mechanical half-step.
-///
-/// GPIOTE keeps capturing while this task batches or publishes events. PPI
-/// timestamps preserve the physical A/B order even if both edge tasks wake
-/// after a BLE radio timeslot.
+#[derive(Clone, Copy)]
+struct CandidateDetent {
+    state: u8,
+    direction: DetentDirection,
+    stable_since: Option<u32>,
+}
+
+const ENCODER_POLL_US: u64 = 100;
+const ENCODER_STABLE_US: u32 = 1_000;
+
+/// Decode timestamped A/B edges into one event at each stable mechanical
+/// half-step. The GPIOTE channels stay armed continuously: polling their event
+/// latches avoids the clear-and-rearm gap in InputChannel::wait().
 struct LeftRotaryEncoder {
+    input_a: InputChannel<'static>,
+    input_b: InputChannel<'static>,
+    capture_a: Cc<'static>,
+    capture_b: Cc<'static>,
+    capture_now: Cc<'static>,
     decoder: HalfStepDecoder,
+    confirmed_state: Option<u8>,
+    candidate: Option<CandidateDetent>,
 }
 
 impl LeftRotaryEncoder {
-    fn new(a_high: bool, b_high: bool) -> Self {
+    fn new(
+        input_a: InputChannel<'static>,
+        input_b: InputChannel<'static>,
+        capture_a: Cc<'static>,
+        capture_b: Cc<'static>,
+        capture_now: Cc<'static>,
+    ) -> Self {
+        let a_high = input_a.pin().is_high();
+        let b_high = input_b.pin().is_high();
+        let decoder = HalfStepDecoder::new(a_high, b_high);
+        let initial_state = decoder.state();
         Self {
-            decoder: HalfStepDecoder::new(a_high, b_high),
+            input_a,
+            input_b,
+            capture_a,
+            capture_b,
+            capture_now,
+            decoder,
+            confirmed_state: matches!(initial_state, 0b00 | 0b11).then_some(initial_state),
+            candidate: None,
         }
+    }
+
+    fn take_edges(&self) -> ([Option<EncoderEdge>; 2], usize) {
+        let gpiote = embassy_nrf::pac::GPIOTE;
+        let a_pending = gpiote.events_in(0).read() != 0;
+        let b_pending = gpiote.events_in(1).read() != 0;
+
+        // Clear first. An edge arriving afterwards leaves its event set for the
+        // next pass, while PPI still updates the corresponding timestamp.
+        if a_pending {
+            gpiote.events_in(0).write_value(0);
+        }
+        if b_pending {
+            gpiote.events_in(1).write_value(0);
+        }
+
+        let mut edges = [None, None];
+        let mut count = 0;
+        if a_pending {
+            edges[count] = Some(EncoderEdge {
+                phase: EncoderPhase::A,
+                high: self.input_a.pin().is_high(),
+                timestamp: self.capture_a.read(),
+            });
+            count += 1;
+        }
+        if b_pending {
+            edges[count] = Some(EncoderEdge {
+                phase: EncoderPhase::B,
+                high: self.input_b.pin().is_high(),
+                timestamp: self.capture_b.read(),
+            });
+            count += 1;
+        }
+
+        if count == 2
+            && compare_edge_timestamps(edges[0].as_ref().unwrap(), edges[1].as_ref().unwrap())
+                == Ordering::Greater
+        {
+            edges.swap(0, 1);
+        }
+        (edges, count)
+    }
+
+    fn process_edge(&mut self, edge: EncoderEdge) {
+        let Some(direction) = self.decoder.update(edge.phase, edge.high) else {
+            return;
+        };
+        let state = self.decoder.state();
+
+        if self.confirmed_state == Some(state) {
+            self.candidate = None;
+        } else {
+            self.candidate = Some(CandidateDetent {
+                state,
+                direction,
+                stable_since: None,
+            });
+        }
+    }
+
+    fn confirm_stable_detent(&mut self, now: u32) -> Option<Direction> {
+        let candidate = self.candidate.as_mut()?;
+        if self.decoder.state() != candidate.state {
+            candidate.stable_since = None;
+            return None;
+        }
+
+        let Some(stable_since) = candidate.stable_since else {
+            candidate.stable_since = Some(now);
+            return None;
+        };
+        if now.wrapping_sub(stable_since) < ENCODER_STABLE_US {
+            return None;
+        }
+
+        let state = candidate.state;
+        let direction = candidate.direction;
+        self.confirmed_state = Some(state);
+        self.candidate = None;
+        Some(match direction {
+            DetentDirection::Positive => Direction::CounterClockwise,
+            DetentDirection::Negative => Direction::Clockwise,
+        })
     }
 }
 
@@ -181,28 +263,14 @@ async fn encoder_event_task() -> ! {
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            let first_edge = ENCODER_EDGE_CHANNEL.receive().await;
-            Timer::after_micros(ENCODER_EDGE_BATCH_US).await;
-
-            let mut edges = [first_edge; ENCODER_EDGE_BATCH_SIZE];
-            let mut edge_count = 1;
-            while edge_count < ENCODER_EDGE_BATCH_SIZE {
-                let Ok(edge) = ENCODER_EDGE_CHANNEL.try_receive() else {
-                    break;
-                };
-                edges[edge_count] = edge;
-                edge_count += 1;
+            Timer::after_micros(ENCODER_POLL_US).await;
+            let (edges, edge_count) = self.take_edges();
+            for edge in edges.into_iter().take(edge_count).flatten() {
+                self.process_edge(edge);
             }
-            edges[..edge_count].sort_unstable_by(compare_edge_timestamps);
 
-            for edge in &edges[..edge_count] {
-                let Some(detent) = self.decoder.update(edge.phase, edge.high) else {
-                    continue;
-                };
-                let direction = match detent {
-                    DetentDirection::Positive => Direction::CounterClockwise,
-                    DetentDirection::Negative => Direction::Clockwise,
-                };
+            let now = self.capture_now.capture();
+            if let Some(direction) = self.confirm_stable_detent(now) {
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }
@@ -294,12 +362,10 @@ async fn main(spawner: Spawner) {
         Pull::Up,
         InputChannelPolarity::Toggle,
     );
-    let encoder_a_high = encoder_a.pin().is_high();
-    let encoder_b_high = encoder_b.pin().is_high();
-
     let encoder_timer = HardwareTimer::new(p.TIMER1);
     let encoder_a_capture = encoder_timer.cc(0);
     let encoder_b_capture = encoder_timer.cc(1);
+    let encoder_now_capture = encoder_timer.cc(2);
     let mut encoder_a_ppi = ppi::Ppi::new_one_to_one(
         p.PPI_CH0,
         encoder_a.event_in(),
@@ -317,9 +383,13 @@ async fn main(spawner: Spawner) {
     encoder_a_ppi.persist();
     encoder_b_ppi.persist();
 
-    spawner.spawn(encoder_a_edge_task(encoder_a, encoder_a_capture).unwrap());
-    spawner.spawn(encoder_b_edge_task(encoder_b, encoder_b_capture).unwrap());
-    let mut encoder = LeftRotaryEncoder::new(encoder_a_high, encoder_b_high);
+    let mut encoder = LeftRotaryEncoder::new(
+        encoder_a,
+        encoder_b,
+        encoder_a_capture,
+        encoder_b_capture,
+        encoder_now_capture,
+    );
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 

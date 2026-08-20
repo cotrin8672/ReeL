@@ -70,6 +70,10 @@ impl HalfStepDecoder {
         self.movement = 0;
         direction
     }
+
+    pub const fn state(&self) -> u8 {
+        self.state
+    }
 }
 
 #[cfg(test)]
