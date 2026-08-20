@@ -3,6 +3,7 @@
 
 #[macro_use]
 mod macros;
+mod rotary_accumulator;
 mod sharp_lcd;
 mod xiao_battery;
 
@@ -11,9 +12,9 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{RNG, SPI3, USBD};
+use embassy_nrf::peripherals::{QDEC, RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
-use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
+use embassy_nrf::{bind_interrupts, qdec, rng, saadc, spim, usb};
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use nrf_mpsl::Flash;
@@ -36,6 +37,7 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
+use rotary_accumulator::DetentAccumulator;
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -44,6 +46,7 @@ use xiao_battery::{
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
     RNG => rng::InterruptHandler<RNG>;
+    QDEC => qdec::InterruptHandler<QDEC>;
     EGU0_SWI0 => nrf_sdc::mpsl::LowPrioInterruptHandler;
     CLOCK_POWER => nrf_sdc::mpsl::ClockInterruptHandler, usb::vbus_detect::InterruptHandler;
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
@@ -89,22 +92,25 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// Read one event per mechanical detent from phase A.
+/// Decode both BM4.0A01 phases continuously with the nRF52840 QDEC peripheral.
 ///
-/// The measured encoder changes phase A once per detent. Phase B is sampled
-/// immediately at the A edge and is used only to determine direction.
-struct LeftRotaryEncoder {
-    pin_a: Input<'static>,
-    pin_b: Input<'static>,
-    last_a: bool,
+/// The encoder has nine electrical pulses and 18 measured detents per
+/// revolution. QDEC reports four state transitions per pulse, so two raw
+/// counts make one mechanical detent. Hardware capture continues while this
+/// task sleeps or publishes a completed detent.
+struct LeftRotaryEncoder<'d> {
+    qdec: qdec::Qdec<'d>,
+    accumulator: DetentAccumulator,
 }
 
-impl LeftRotaryEncoder {
-    fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
+const ENCODER_COUNTS_PER_DETENT: i16 = 2;
+const ENCODER_READ_INTERVAL_MS: u64 = 1;
+
+impl<'d> LeftRotaryEncoder<'d> {
+    fn new(qdec: qdec::Qdec<'d>) -> Self {
         Self {
-            last_a: pin_a.is_high(),
-            pin_a,
-            pin_b,
+            qdec,
+            accumulator: DetentAccumulator::new(ENCODER_COUNTS_PER_DETENT),
         }
     }
 }
@@ -125,33 +131,18 @@ async fn encoder_event_task() -> ! {
     }
 }
 
-impl Runnable for LeftRotaryEncoder {
+impl<'d> Runnable for LeftRotaryEncoder<'d> {
     async fn run(&mut self) -> ! {
         loop {
-            self.pin_a.wait_for_any_edge().await;
-
-            let a = self.pin_a.is_high();
-            let b = self.pin_b.is_high();
-
-            // Ignore an interrupt that did not result in an A state change.
-            if a == self.last_a {
-                continue;
-            }
-
-            // Preserve the existing A/B polarity used by the old custom
-            // decoder: equal levels are counter-clockwise.
-            let direction = if a == b {
+            Timer::after_millis(ENCODER_READ_INTERVAL_MS).await;
+            let detents = self.accumulator.push(self.qdec.read().await);
+            let direction = if detents > 0 {
                 Direction::CounterClockwise
             } else {
                 Direction::Clockwise
             };
 
-            // Confirm that the A edge remained stable before publishing it.
-            Timer::after_millis(2).await;
-            let settled_a = self.pin_a.is_high();
-
-            if settled_a == a {
-                self.last_a = a;
+            for _ in 0..detents.unsigned_abs() {
                 ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }
@@ -231,9 +222,11 @@ async fn main(spawner: Spawner) {
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
-    let encoder_a = Input::new(p.P1_14, Pull::Up);
-    let encoder_b = Input::new(p.P1_15, Pull::Up);
-    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
+    let mut encoder_qdec_config = qdec::Config::default();
+    encoder_qdec_config.period = qdec::SamplePeriod::_128us;
+    encoder_qdec_config.debounce = true;
+    let encoder_qdec = qdec::Qdec::new(p.QDEC, Irqs, p.P1_14, p.P1_15, encoder_qdec_config);
+    let mut encoder = LeftRotaryEncoder::new(encoder_qdec);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
