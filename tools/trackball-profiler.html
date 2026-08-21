@@ -26,6 +26,10 @@
       box-sizing: border-box;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     body {
       min-width: 320px;
       margin: 0;
@@ -49,6 +53,17 @@
       width: min(1180px, calc(100% - 36px));
       margin: 0 auto;
     }
+
+    main.shell {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 0 20px;
+    }
+
+    #calibration { order: 1; }
+    #profileCpi { order: 2; }
+    #results { order: 3; }
 
     .topbar {
       display: flex;
@@ -227,8 +242,8 @@
       align-items: center;
       justify-content: space-between;
       gap: 18px;
-      min-height: 68px;
-      padding: 0 22px;
+      min-height: 50px;
+      padding: 0 18px;
       border-bottom: 1px solid var(--line);
     }
 
@@ -237,6 +252,138 @@
       font-size: 14px;
       font-weight: 800;
       letter-spacing: -0.01em;
+    }
+
+    .settings-nav {
+      display: flex;
+      gap: 8px;
+      margin: 18px 0 14px;
+      overflow-x: auto;
+    }
+
+    .settings-nav button {
+      flex: 0 0 auto;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.48);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .settings-nav button:hover,
+    .settings-nav button.active {
+      border-color: rgba(0, 127, 123, 0.38);
+      color: var(--teal);
+      background: var(--teal-soft);
+    }
+
+    .cpi-settings {
+      margin-bottom: 0;
+    }
+
+    .cpi-body {
+      padding: 12px 14px;
+    }
+
+    .cpi-intro {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    .cpi-intro p {
+      max-width: 720px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .cpi-save-state {
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(21, 45, 56, 0.07);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cpi-save-state.dirty {
+      color: #a34132;
+      background: var(--coral-soft);
+    }
+
+    .cpi-save-state.saved {
+      color: var(--teal);
+      background: var(--teal-soft);
+    }
+
+    .cpi-control {
+      display: grid;
+      grid-template-columns: minmax(170px, 0.28fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .cpi-profile-picker,
+    .cpi-slider-panel {
+      display: grid;
+      gap: 10px;
+      padding: 11px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.52);
+    }
+
+    .cpi-field-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cpi-slider-head {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .cpi-value {
+      min-width: 88px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      color: var(--teal);
+      background: var(--teal-soft);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 11px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .cpi-slider {
+      height: 24px;
+      margin: 3px 0 0;
+    }
+
+    .cpi-scale {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      color: var(--muted);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 9px;
+    }
+
+    .cpi-scale span:last-child {
+      text-align: right;
     }
 
     .capture-mode {
@@ -288,7 +435,7 @@
     .stage {
       position: relative;
       display: grid;
-      min-height: 520px;
+      min-height: 350px;
       place-items: center;
       overflow: hidden;
       outline: none;
@@ -312,7 +459,7 @@
 
     .stage-ring {
       position: absolute;
-      width: min(64vw, 370px);
+      width: min(48vw, 270px);
       aspect-ratio: 1;
       border: 1px solid rgba(21, 45, 56, 0.18);
       border-radius: 50%;
@@ -341,7 +488,7 @@
       position: relative;
       z-index: 3;
       color: var(--ink);
-      font-size: 112px;
+      font-size: 88px;
       font-weight: 300;
       line-height: 1;
       text-shadow: 4px 4px 0 rgba(198, 219, 62, 0.72);
@@ -356,8 +503,8 @@
     .vector-layer {
       position: absolute;
       z-index: 2;
-      width: min(64vw, 370px);
-      height: min(64vw, 370px);
+      width: min(48vw, 270px);
+      height: min(48vw, 270px);
       pointer-events: none;
       overflow: visible;
     }
@@ -369,7 +516,7 @@
     .stage-message {
       position: absolute;
       z-index: 5;
-      bottom: 30px;
+      bottom: 12px;
       left: 50%;
       width: calc(100% - 48px);
       color: var(--muted);
@@ -387,7 +534,7 @@
     .primary {
       position: absolute;
       z-index: 7;
-      bottom: 74px;
+      bottom: 40px;
       left: 50%;
       min-width: 210px;
       padding: 14px 20px;
@@ -419,8 +566,15 @@
 
     .session-body {
       display: grid;
-      gap: 24px;
-      padding: 22px;
+      gap: 10px;
+      padding: 11px 14px;
+    }
+
+    .advanced-settings {
+      display: grid;
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
     }
 
     .section-label {
@@ -1258,6 +1412,14 @@
         grid-template-columns: 1fr;
       }
 
+      .cpi-intro {
+        flex-direction: column;
+      }
+
+      .cpi-control {
+        grid-template-columns: 1fr;
+      }
+
       .preview-pad {
         min-height: 300px;
       }
@@ -1286,7 +1448,7 @@
   <header class="shell topbar">
     <div class="brand">
       <span class="brand-mark">R</span>
-      <span>Trackball Profiler</span>
+      <span>ReeL Tuning Console</span>
     </div>
     <div class="device-toolbar">
       <div id="deviceStatus" class="no-log device-status" data-state="idle">RMK 未接続</div>
@@ -1295,32 +1457,52 @@
   </header>
 
   <main class="shell">
-    <section class="hero">
-      <div>
-        <p class="eyebrow">PMW3610 · 8-direction calibration</p>
-        <h1>感覚を、変換行列に。</h1>
-        <p class="hero-copy">
-          表示された8方向へトラックボールを順番に転がすだけ。
-          ブラウザがHIDの相対移動を計測し、軸の傾き・反転・感度差をまとめて補正します。
-        </p>
+    <section id="profileCpi" class="card cpi-settings">
+      <div class="card-head">
+        <h2 class="card-title">BTプロファイル別CPI</h2>
+        <span id="cpiSaveState" class="cpi-save-state">接続待ち</span>
       </div>
-      <ol class="workflow">
-        <li>計測を開始</li>
-        <li>矢印へ転がす</li>
-        <li>行列をコピー</li>
-      </ol>
+      <div class="cpi-body">
+        <div class="cpi-control">
+          <label class="cpi-profile-picker">
+            <span class="cpi-field-label">Profile</span>
+            <select id="profileCpiProfile" class="round-select" disabled>
+              <option value="0">Profile 1 · BT1</option>
+              <option value="1">Profile 2 · BT2</option>
+              <option value="2">Profile 3 · BT3</option>
+              <option value="3">Profile 4 · BT4</option>
+              <option value="4">Profile 5 · BT5</option>
+            </select>
+          </label>
+          <label class="cpi-slider-panel">
+            <span class="cpi-slider-head">
+              <output id="profileCpiValue" class="cpi-value" for="profileCpiSlider">1600 CPI</output>
+            </span>
+            <input id="profileCpiSlider" class="cpi-slider" type="range"
+              min="200" max="3200" step="200" value="1600" list="profileCpiTicks" disabled>
+            <datalist id="profileCpiTicks">
+              <option value="200"></option><option value="400"></option>
+              <option value="600"></option><option value="800"></option>
+              <option value="1000"></option><option value="1200"></option>
+              <option value="1400"></option><option value="1600"></option>
+              <option value="1800"></option><option value="2000"></option>
+              <option value="2200"></option><option value="2400"></option>
+              <option value="2600"></option><option value="2800"></option>
+              <option value="3000"></option><option value="3200"></option>
+            </datalist>
+            <span class="cpi-scale" aria-hidden="true">
+              <span>200</span><span>3200</span>
+            </span>
+          </label>
+        </div>
+      </div>
     </section>
 
-    <section class="workspace">
+    <section id="calibration" class="workspace">
       <article class="card">
         <div class="card-head">
-          <h2 class="card-title">8方向プロファイル</h2>
-          <div class="capture-head-actions">
-            <button id="traceToggle" class="trace-toggle" type="button" aria-pressed="false">
-              入力矢印 OFF
-            </button>
-            <span id="captureMode" class="capture-mode">Pointer Lock / raw input を優先</span>
-          </div>
+          <h2 class="card-title">較正</h2>
+          <span id="captureMode" class="capture-mode" hidden></span>
         </div>
         <div id="stage" class="stage stage-idle" tabindex="0" aria-label="トラックボール計測エリア">
           <div class="stage-ring"></div>
@@ -1335,25 +1517,38 @@
                   stroke="#ef6a53" stroke-width="5" stroke-linecap="round"
                   marker-end="url(#coralArrow)" opacity="0"></line>
           </svg>
-          <div id="directionArrow" class="direction-arrow" aria-hidden="true">↑</div>
-          <button id="startButton" class="primary" type="button">プロファイルを開始</button>
-          <div id="stageMessage" class="stage-message">
-            クリック後、矢印方向へ<strong>一度スーッと転がして止める</strong>だけです
-          </div>
+          <div id="directionArrow" class="direction-arrow" aria-hidden="true">→</div>
+          <button id="startButton" class="primary" type="button">計測開始</button>
+          <div id="stageMessage" class="stage-message" aria-live="polite"></div>
         </div>
       </article>
 
       <aside class="card session">
         <div class="card-head">
-          <h2 class="card-title">セッション設定</h2>
-          <span id="progressText" class="capture-mode">0 / 8</span>
+          <h2 class="card-title">設定</h2>
+          <span id="progressText" class="capture-mode">0 / 4</span>
         </div>
         <div class="session-body">
           <section>
             <div class="section-label">
-              <span>現在のファームウェア行列 F</span>
-              <span>editable</span>
+              <span>進捗</span>
             </div>
+            <div id="directionList" class="direction-list" aria-label="計測進捗"></div>
+          </section>
+
+          <section>
+            <div class="section-label">
+              <span>感度</span>
+            </div>
+            <div class="range-row">
+              <input id="sensitivity" type="range" min="50" max="150" step="1" value="100">
+              <output id="sensitivityValue" class="range-value">1.00×</output>
+            </div>
+          </section>
+
+          <button id="resetButton" class="ghost" type="button">計測をリセット</button>
+
+          <section class="advanced-settings" aria-label="変換行列設定">
             <div class="matrix-input" aria-label="現在の2行2列変換行列">
               <span class="bracket left"></span>
               <div class="matrix-fields">
@@ -1364,61 +1559,21 @@
               </div>
               <span class="bracket right"></span>
             </div>
-            <p class="matrix-note">
-              接続するとRMKに保存済みの値を自動で読み込みます。
-              未接続時は現在の標準値です。
-            </p>
             <div class="device-actions">
-              <button id="readMatrix" class="ghost" type="button" disabled>端末から再読込</button>
-              <button id="applyMatrix" class="apply-matrix" type="button" disabled>この行列を適用</button>
+              <button id="readMatrix" class="ghost" type="button" disabled>再読込</button>
+              <button id="applyMatrix" class="apply-matrix" type="button" disabled>適用</button>
             </div>
-            <label class="auto-apply">
-              <input id="autoApply" type="checkbox" checked>
-              計測完了後、最終行列を自動で保存・反映
-            </label>
-            <p id="deviceDetail" class="device-detail">Chrome / EdgeのWebHIDで、USBまたはBLE接続中のReeLへ書き込みます。</p>
+            <button id="traceToggle" class="trace-toggle" type="button" aria-pressed="false">入力表示 OFF</button>
           </section>
-
-          <section>
-            <div class="section-label">
-              <span>計測する方向</span>
-              <span id="roundLabel">5 rounds</span>
-            </div>
-            <div id="directionList" class="direction-list" aria-label="計測進捗"></div>
-          </section>
-
-          <section>
-            <div class="section-label">
-              <span>繰り返し精度</span>
-              <span>8方向 / 周</span>
-            </div>
-            <select id="rounds" class="round-select" aria-label="8方向計測の繰り返し回数">
-              <option value="1">1周 — クイック（8ストローク）</option>
-              <option value="3">3周 — 標準（24ストローク）</option>
-              <option value="5" selected>5周 — 精密（40ストローク）</option>
-            </select>
-          </section>
-
-          <section>
-            <div class="section-label">
-              <span>最終感度</span>
-              <span>あとから調整可</span>
-            </div>
-            <div class="range-row">
-              <input id="sensitivity" type="range" min="50" max="150" step="1" value="100">
-              <output id="sensitivityValue" class="range-value">1.00×</output>
-            </div>
-          </section>
-
-          <button id="resetButton" class="ghost" type="button">計測をリセット</button>
+          <p id="deviceDetail" class="device-detail" hidden></p>
         </div>
       </aside>
     </section>
 
     <section id="results" class="card results" aria-live="polite">
       <div class="card-head">
-        <h2 class="card-title">プロファイル結果</h2>
-        <span class="capture-mode">direction-only robust fit</span>
+        <h2 class="card-title">結果</h2>
+        <button id="resultResetButton" class="ghost" type="button">再計測</button>
       </div>
       <div class="result-grid">
         <div class="diagnostic">
@@ -1428,7 +1583,7 @@
           </div>
           <div class="plot">
             <svg id="resultPlot" viewBox="-180 -180 360 360" role="img"
-                 aria-label="補正前後の8方向比較"></svg>
+                 aria-label="補正前後の上下左右比較"></svg>
           </div>
           <div class="legend">
             <span class="before">補正前</span>
@@ -1452,7 +1607,7 @@
 
         <div class="outputs">
           <div class="result-summary">
-            <strong id="resultSummary">8方向から補正値を推定しました</strong>
+            <strong id="resultSummary">上下左右から補正値を推定しました</strong>
             <span id="confidence" class="confidence">GOOD FIT</span>
           </div>
 
@@ -1539,23 +1694,6 @@
       </section>
     </section>
 
-    <section class="footnotes">
-      <div class="note">
-        <span class="note-num">01</span>
-        <strong>ログを書かなくてよい理由</strong>
-        <p>Pointer Lock中の <code>movementX/Y</code> が、OSへ届いた相対HID移動量をその場で取得します。</p>
-      </div>
-      <div class="note">
-        <span class="note-num">02</span>
-        <strong>転がす距離は厳密でなくてOK</strong>
-        <p>距離ではなく方向をフィットし、5周分をロバスト推定するため、ストローク長や手のブレの影響を抑えられます。</p>
-      </div>
-      <div class="note">
-        <span class="note-num">03</span>
-        <strong>OSの加速を避ける</strong>
-        <p>対応ブラウザでは未加工入力を要求します。使えない場合は、同じ速さで転がすと結果が安定します。</p>
-      </div>
-    </section>
   </main>
 
   <div id="toast" class="toast" role="status">コピーしました</div>
@@ -1564,25 +1702,20 @@
     "use strict";
 
     const directions = [
-      { label: "上", symbol: "↑", x: 0, y: -1 },
-      { label: "右上", symbol: "↗", x: Math.SQRT1_2, y: -Math.SQRT1_2 },
       { label: "右", symbol: "→", x: 1, y: 0 },
-      { label: "右下", symbol: "↘", x: Math.SQRT1_2, y: Math.SQRT1_2 },
-      { label: "下", symbol: "↓", x: 0, y: 1 },
-      { label: "左下", symbol: "↙", x: -Math.SQRT1_2, y: Math.SQRT1_2 },
       { label: "左", symbol: "←", x: -1, y: 0 },
-      { label: "左上", symbol: "↖", x: -Math.SQRT1_2, y: -Math.SQRT1_2 }
+      { label: "下", symbol: "↓", x: 0, y: 1 },
+      { label: "上", symbol: "↑", x: 0, y: -1 }
     ];
 
     const stage = document.getElementById("stage");
     const startButton = document.getElementById("startButton");
     const resetButton = document.getElementById("resetButton");
+    const resultResetButton = document.getElementById("resultResetButton");
     const stageMessage = document.getElementById("stageMessage");
     const directionArrow = document.getElementById("directionArrow");
     const directionList = document.getElementById("directionList");
     const progressText = document.getElementById("progressText");
-    const roundLabel = document.getElementById("roundLabel");
-    const roundsSelect = document.getElementById("rounds");
     const observedVector = document.getElementById("observedVector");
     const traceToggle = document.getElementById("traceToggle");
     const captureMode = document.getElementById("captureMode");
@@ -1604,7 +1737,10 @@
     const deviceDetail = document.getElementById("deviceDetail");
     const readMatrixButton = document.getElementById("readMatrix");
     const applyMatrixButton = document.getElementById("applyMatrix");
-    const autoApply = document.getElementById("autoApply");
+    const profileCpiProfile = document.getElementById("profileCpiProfile");
+    const profileCpiSlider = document.getElementById("profileCpiSlider");
+    const profileCpiValue = document.getElementById("profileCpiValue");
+    const cpiSaveState = document.getElementById("cpiSaveState");
 
     let samples = [];
     let active = false;
@@ -1612,9 +1748,14 @@
     let currentIndex = 0;
     let sumX = 0;
     let sumY = 0;
+    let pathLength = 0;
     let idleTimer = 0;
-    let cooldownTimer = 0;
     let fittedBase = null;
+    let resultSamples = [];
+    let previousRoundFit = null;
+    let stableRoundCount = 0;
+    let gestureAttempts = 0;
+    let stoppedAtLimit = false;
     let copyPayloads = {};
     let showObservedVector = false;
     let previewActive = false;
@@ -1626,9 +1767,23 @@
     let hidDevice = null;
     let pendingHidRequest = null;
     let calibrationMacroOffset = null;
+    let profileCpiMacroOffset = null;
+    let profileCpiValues = [];
+    let profileCpiSaveTimer = 0;
+    let profileCpiSaveRevision = 0;
+    let profileCpiSavedRevision = 0;
+    let profileCpiWriteInFlight = false;
     let autoApplyTimer = 0;
     let lastReplacement = null;
     let resultApplied = false;
+
+    const MIN_ROUNDS = 3;
+    const MAX_ROUNDS = 10;
+    const MAX_GESTURE_ATTEMPTS = 60;
+    const MIN_INLIERS_PER_DIRECTION = 3;
+    const TARGET_RMS_DEGREES = 6;
+    const MAX_FIT_DRIFT_DEGREES = 1.5;
+    const REQUIRED_STABLE_ROUNDS = 2;
 
     const REEL_VENDOR_ID = 0x4c4b;
     const REEL_PRODUCT_ID = 0x524d;
@@ -1638,6 +1793,13 @@
     const CALIBRATION_BLOB_SIZE = 28;
     const CALIBRATION_SCALE = 1000;
     const CALIBRATION_MAGIC = [0x52, 0x4c, 0x43, 0x31];
+    const PROFILE_CPI_BLOB_SIZE = 24;
+    const PROFILE_CPI_MAGIC = [0x52, 0x43, 0x50, 0x31];
+    const PROFILE_CPI_COUNT = 5;
+    const PROFILE_CPI_MIN = 200;
+    const PROFILE_CPI_MAX = 3200;
+    const PROFILE_CPI_STEP = 200;
+    const DEFAULT_PROFILE_CPI = Array(PROFILE_CPI_COUNT).fill(1600);
     const DEFAULT_FIRMWARE_MATRIX = [
       [-0.265, 1.142],
       [-0.831, 0.562]
@@ -1661,7 +1823,32 @@
       const connected = Boolean(hidDevice?.opened) && state !== "idle";
       readMatrixButton.disabled = !connected;
       applyMatrixButton.disabled = !connected || resultApplied;
+      profileCpiProfile.disabled = !connected;
+      profileCpiSlider.disabled = !connected;
       connectDeviceButton.textContent = connected ? "切断" : "ワイヤレス接続";
+      if (!connected) setCpiSaveState("接続待ち");
+    }
+
+    function setCpiSaveState(label, state = "") {
+      cpiSaveState.textContent = label;
+      cpiSaveState.classList.toggle("dirty", state === "dirty");
+      cpiSaveState.classList.toggle("saved", state === "saved");
+    }
+
+    function currentProfileCpi() {
+      return [...profileCpiValues];
+    }
+
+    function setProfileCpiInputs(values) {
+      profileCpiValues = [...values];
+      renderProfileCpiControl();
+    }
+
+    function renderProfileCpiControl() {
+      const profile = Number(profileCpiProfile.value);
+      const cpi = profileCpiValues[profile];
+      profileCpiSlider.value = String(cpi);
+      profileCpiValue.textContent = `${cpi} CPI`;
     }
 
     function setMatrixInputs(matrix) {
@@ -1728,6 +1915,51 @@
       }
     }
 
+    function validateProfileCpi(values) {
+      if (values.length !== PROFILE_CPI_COUNT) {
+        throw new Error("CPIプロファイル数が一致しません");
+      }
+      if (values.some(cpi => !Number.isInteger(cpi)
+        || cpi < PROFILE_CPI_MIN
+        || cpi > PROFILE_CPI_MAX
+        || cpi % PROFILE_CPI_STEP !== 0)) {
+        throw new Error(`CPIは${PROFILE_CPI_MIN}〜${PROFILE_CPI_MAX}の${PROFILE_CPI_STEP}刻みで指定してください`);
+      }
+      return values;
+    }
+
+    function encodeProfileCpiBlob(values) {
+      validateProfileCpi(values);
+      const bytes = new Uint8Array(PROFILE_CPI_BLOB_SIZE);
+      const view = new DataView(bytes.buffer);
+      bytes.set(PROFILE_CPI_MAGIC, 0);
+      bytes[4] = 1;
+      bytes[5] = PROFILE_CPI_COUNT;
+      view.setUint16(6, PROFILE_CPI_STEP, true);
+      values.forEach((cpi, index) => view.setUint16(8 + index * 2, cpi, true));
+      view.setUint32(20, fnv1a(bytes.subarray(0, 20)), true);
+      return bytes;
+    }
+
+    function decodeProfileCpiBlob(bytes) {
+      if (bytes.length !== PROFILE_CPI_BLOB_SIZE) return null;
+      if (!PROFILE_CPI_MAGIC.every((value, index) => bytes[index] === value)) return null;
+      if (bytes[4] !== 1 || bytes[5] !== PROFILE_CPI_COUNT) return null;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      if (view.getUint16(6, true) !== PROFILE_CPI_STEP) return null;
+      if (bytes[18] !== 0 || bytes[19] !== 0) return null;
+      if (view.getUint32(20, true) !== fnv1a(bytes.subarray(0, 20))) return null;
+      const values = Array.from(
+        { length: PROFILE_CPI_COUNT },
+        (_, index) => view.getUint16(8 + index * 2, true)
+      );
+      try {
+        return validateProfileCpi(values);
+      } catch (error) {
+        return null;
+      }
+    }
+
     function handleHidInputReport(event) {
       if (!pendingHidRequest || event.device !== hidDevice) return;
       const response = new Uint8Array(
@@ -1775,14 +2007,16 @@
       packet[0] = VIA_GET_MACRO_BUFFER_SIZE;
       const response = await sendViaPacket(packet);
       const macroSize = response[1] * 256 + response[2];
-      if (macroSize < CALIBRATION_BLOB_SIZE) {
+      const requiredSize = CALIBRATION_BLOB_SIZE + PROFILE_CPI_BLOB_SIZE;
+      if (macroSize < requiredSize) {
         throw new Error(`RMKの設定領域が不足しています (${macroSize} bytes)`);
       }
       calibrationMacroOffset = macroSize - CALIBRATION_BLOB_SIZE;
+      profileCpiMacroOffset = calibrationMacroOffset - PROFILE_CPI_BLOB_SIZE;
       return calibrationMacroOffset;
     }
 
-    async function readCalibrationFromDevice() {
+    async function readCalibrationFromDevice(announce = true) {
       const offset = calibrationMacroOffset ?? await discoverCalibrationOffset();
       const packet = new Uint8Array(32);
       packet[0] = VIA_GET_MACRO_BUFFER;
@@ -1795,7 +2029,7 @@
       setMatrixInputs(matrix);
       resetSession(true);
       deviceDetail.textContent = `保存値を読込済み · macro offset ${offset}`;
-      showToast("RMKから調整値を読み込みました");
+      if (announce) showToast("RMKから調整値を読み込みました");
       return matrix;
     }
 
@@ -1823,9 +2057,74 @@
       }
     }
 
+    async function readProfileCpiFromDevice(announce = true) {
+      if (profileCpiMacroOffset === null) await discoverCalibrationOffset();
+      const offset = profileCpiMacroOffset;
+      const packet = new Uint8Array(32);
+      packet[0] = VIA_GET_MACRO_BUFFER;
+      packet[1] = offset >> 8;
+      packet[2] = offset & 0xff;
+      packet[3] = PROFILE_CPI_BLOB_SIZE;
+      const response = await sendViaPacket(packet);
+      const values = decodeProfileCpiBlob(response.slice(4, 4 + PROFILE_CPI_BLOB_SIZE));
+      if (!values) throw new Error("保存済みCPI設定を検証できません");
+      setProfileCpiInputs(values);
+      profileCpiSaveRevision = 0;
+      profileCpiSavedRevision = 0;
+      setCpiSaveState("同期済み", "saved");
+      if (announce) showToast("RMKからCPI設定を読み込みました");
+      return values;
+    }
+
+    async function writeProfileCpiToDevice(values) {
+      if (profileCpiMacroOffset === null) await discoverCalibrationOffset();
+      const blob = encodeProfileCpiBlob(values);
+      const packet = new Uint8Array(32);
+      packet[0] = VIA_SET_MACRO_BUFFER;
+      packet[1] = profileCpiMacroOffset >> 8;
+      packet[2] = profileCpiMacroOffset & 0xff;
+      packet[3] = PROFILE_CPI_BLOB_SIZE;
+      packet.set(blob, 4);
+      await sendViaPacket(packet);
+    }
+
+    function scheduleProfileCpiSave() {
+      profileCpiSaveRevision += 1;
+      window.clearTimeout(profileCpiSaveTimer);
+      setCpiSaveState("保存中");
+      profileCpiSaveTimer = window.setTimeout(flushProfileCpiSave, 250);
+    }
+
+    async function flushProfileCpiSave() {
+      if (profileCpiWriteInFlight || profileCpiSavedRevision === profileCpiSaveRevision) return;
+      if (!hidDevice?.opened) {
+        setCpiSaveState("接続待ち", "dirty");
+        return;
+      }
+
+      const revision = profileCpiSaveRevision;
+      const values = currentProfileCpi();
+      profileCpiWriteInFlight = true;
+      try {
+        await writeProfileCpiToDevice(values);
+        profileCpiSavedRevision = revision;
+        if (revision === profileCpiSaveRevision) setCpiSaveState("保存済み", "saved");
+      } catch (error) {
+        profileCpiSavedRevision = revision;
+        setCpiSaveState("保存失敗", "dirty");
+        showToast(error.message);
+      } finally {
+        profileCpiWriteInFlight = false;
+        if (profileCpiSavedRevision !== profileCpiSaveRevision) {
+          window.clearTimeout(profileCpiSaveTimer);
+          profileCpiSaveTimer = window.setTimeout(flushProfileCpiSave, 100);
+        }
+      }
+    }
+
     function scheduleAutoApply(matrix) {
       lastReplacement = matrix;
-      if (!autoApply.checked || !hidDevice?.opened || resultApplied) return;
+      if (!hidDevice?.opened || resultApplied) return;
       window.clearTimeout(autoApplyTimer);
       autoApplyTimer = window.setTimeout(async () => {
         try {
@@ -1851,9 +2150,13 @@
       hidDevice = device;
       hidDevice.addEventListener("inputreport", handleHidInputReport);
       calibrationMacroOffset = null;
-      setDeviceState("connected", "RMK 接続済み", "保存済み行列を読み込んでいます…");
+      profileCpiMacroOffset = null;
+      setDeviceState("connected", "RMK 接続済み", "保存済み設定を読み込んでいます…");
       try {
-        await readCalibrationFromDevice();
+        await readCalibrationFromDevice(false);
+        await readProfileCpiFromDevice(false);
+        deviceDetail.textContent = "較正行列とBTプロファイル別CPIを読み込みました。";
+        showToast("RMKから設定を読み込みました");
       } catch (error) {
         setDeviceState("error", "RMK 読込失敗", error.message);
         throw error;
@@ -1873,6 +2176,8 @@
           await hidDevice.close();
           hidDevice = null;
           calibrationMacroOffset = null;
+          profileCpiMacroOffset = null;
+          window.clearTimeout(profileCpiSaveTimer);
           setDeviceState("idle", "RMK 未接続", "切断しました。計測機能はオフラインでも利用できます。");
           return;
         }
@@ -1909,18 +2214,10 @@
       }
     }
 
-    function requestedRounds() {
-      return Number(roundsSelect.value);
-    }
-
-    function requestedSamples() {
-      return requestedRounds() * directions.length;
-    }
-
     function renderDirectionList() {
       directionList.replaceChildren();
       const completedInRound = samples.length % directions.length;
-      const allComplete = samples.length >= requestedSamples();
+      const allComplete = phase === "complete";
       const activeDirection = currentIndex % directions.length;
       directions.forEach((direction, index) => {
         const chip = document.createElement("div");
@@ -1932,11 +2229,11 @@
         if (active && index === activeDirection) chip.classList.add("active");
         directionList.append(chip);
       });
+      const completedRounds = Math.floor(samples.length / directions.length);
       const visibleRound = allComplete
-        ? requestedRounds()
-        : Math.min(requestedRounds(), Math.floor(samples.length / directions.length) + 1);
-      progressText.textContent = `${samples.length} / ${requestedSamples()} · ${visibleRound}周目`;
-      roundLabel.textContent = `${requestedRounds()} rounds`;
+        ? Math.max(1, Math.ceil(samples.length / directions.length))
+        : Math.min(MAX_ROUNDS, completedRounds + 1);
+      progressText.textContent = `${samples.length}回 · ${visibleRound}/${MAX_ROUNDS}周`;
     }
 
     function setObservedVector(x, y) {
@@ -1962,7 +2259,6 @@
         currentIndex = 0;
       }
 
-      roundsSelect.disabled = true;
       startButton.hidden = true;
       stage.classList.remove("stage-idle");
       renderDirectionList();
@@ -1976,34 +2272,26 @@
           captureMode.textContent = "Pointer Lock / 標準入力";
         } catch (fallbackError) {
           active = false;
-          roundsSelect.disabled = false;
           startButton.hidden = false;
           startButton.textContent = "もう一度試す";
           stage.classList.add("stage-idle");
-          setPrompt("<strong>Pointer Lockを開始できませんでした。</strong> Chrome / Edgeで開いて再試行してください");
+          setPrompt("Pointer Lock エラー");
         }
       }
     }
 
     function prepareDirection(roundSummary = "") {
-      clearTimeout(cooldownTimer);
       clearTimeout(idleTimer);
       sumX = 0;
       sumY = 0;
+      pathLength = 0;
       setObservedVector(0, 0);
 
       const direction = directions[currentIndex % directions.length];
       directionArrow.textContent = direction.symbol;
-      phase = "cooldown";
-      setPrompt(roundSummary ||
-        `次は <strong>${direction.label} ${direction.symbol}</strong>。手を止めて少し待ってください`);
+      phase = "waiting";
+      setPrompt(roundSummary);
       renderDirectionList();
-
-      cooldownTimer = window.setTimeout(() => {
-        if (!active || document.pointerLockElement !== stage) return;
-        phase = "waiting";
-        setPrompt(`<strong>${direction.label} ${direction.symbol}</strong> へ一度転がして、止めてください`);
-      }, roundSummary ? 1200 : 650);
     }
 
     function handleMovement(event) {
@@ -2017,8 +2305,9 @@
       phase = "measuring";
       sumX += dx;
       sumY += dy;
+      pathLength += Math.hypot(dx, dy);
       setObservedVector(sumX, sumY);
-      setPrompt(`<strong>計測中…</strong> そのまま止めると自動で確定します`);
+      setPrompt("計測中");
 
       clearTimeout(idleTimer);
       idleTimer = window.setTimeout(finishGesture, 380);
@@ -2027,13 +2316,34 @@
     function finishGesture() {
       if (!active || phase !== "measuring") return;
       const distance = Math.hypot(sumX, sumY);
+      const straightness = distance / Math.max(pathLength, distance);
+      gestureAttempts += 1;
 
-      if (distance < 18) {
+      if (distance < 40) {
         phase = "waiting";
         sumX = 0;
         sumY = 0;
+        pathLength = 0;
         setObservedVector(0, 0);
-        setPrompt(`<strong>動きが小さすぎました。</strong> ${directions[currentIndex % directions.length].symbol} へもう少し大きく転がしてください`);
+        if (gestureAttempts >= MAX_GESTURE_ATTEMPTS) {
+          completeSession(null, "試行上限");
+          return;
+        }
+        setPrompt("もう一度");
+        return;
+      }
+
+      if (straightness < 0.82) {
+        phase = "waiting";
+        sumX = 0;
+        sumY = 0;
+        pathLength = 0;
+        setObservedVector(0, 0);
+        if (gestureAttempts >= MAX_GESTURE_ATTEMPTS) {
+          completeSession(null, "試行上限");
+          return;
+        }
+        setPrompt("まっすぐ、もう一度");
         return;
       }
 
@@ -2045,54 +2355,82 @@
         tx: target.x,
         ty: target.y,
         label: target.label,
-        directionIndex
+        directionIndex,
+        straightness
       });
 
       currentIndex += 1;
       renderDirectionList();
 
-      if (currentIndex >= requestedSamples()) {
-        completeSession();
-      } else {
-        let roundSummary = "";
-        if (currentIndex % directions.length === 0) {
-          fittedBase = fitCorrection(samples);
-          const provisionalError = rmsAngle(fittedBase);
-          const completedRound = currentIndex / directions.length;
-          roundSummary = `<strong>${completedRound}周目を反映。</strong> 暫定RMS誤差 ${provisionalError.toFixed(1)}° → 次の周へ`;
-        }
-        prepareDirection(roundSummary);
+      if (gestureAttempts >= MAX_GESTURE_ATTEMPTS) {
+        completeSession(null, "試行上限");
+        return;
       }
+
+      let roundSummary = "";
+      if (currentIndex % directions.length === 0) {
+        let assessment;
+        try {
+          assessment = assessCompletedRound();
+        } catch (error) {
+          previousRoundFit = null;
+          stableRoundCount = 0;
+          const completedRound = currentIndex / directions.length;
+          if (completedRound >= MAX_ROUNDS) {
+            completeSession(null, "周回上限");
+            return;
+          }
+          prepareDirection();
+          return;
+        }
+        fittedBase = assessment.matrix;
+        const completedRound = currentIndex / directions.length;
+
+        if (assessment.converged) {
+          completeSession(assessment);
+          return;
+        }
+        if (completedRound >= MAX_ROUNDS) {
+          completeSession(assessment, "周回上限");
+          return;
+        }
+
+        roundSummary = `${completedRound}/${MAX_ROUNDS}周 · RMS ${assessment.rms.toFixed(1)}°`;
+      }
+      prepareDirection(roundSummary);
     }
 
-    function completeSession() {
+    function completeSession(assessment = null, limitReason = "") {
       active = false;
       phase = "complete";
       resultApplied = false;
+      stoppedAtLimit = Boolean(limitReason);
       sensitivity.disabled = false;
       applyMatrixButton.disabled = !hidDevice?.opened;
-      roundsSelect.disabled = false;
       clearTimeout(idleTimer);
-      clearTimeout(cooldownTimer);
-      setPrompt("<strong>計測完了。</strong> 下に補正行列を生成しました");
       directionArrow.textContent = "✓";
       renderDirectionList();
       if (document.pointerLockElement === stage) document.exitPointerLock();
 
       try {
-        fittedBase = fitCorrection(samples);
+        const finalAssessment = assessment || fitReliableCorrection(samples);
+        fittedBase = finalAssessment.matrix;
+        resultSamples = finalAssessment.inliers;
+        setPrompt(limitReason || "完了");
         renderResults();
         results.classList.add("visible");
+        results.hidden = false;
+        document.getElementById("calibration").hidden = true;
+        document.getElementById("profileCpi").hidden = true;
         window.setTimeout(() => {
           recenterPreview();
           placePreviewTarget();
-          results.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 120);
       } catch (error) {
         fittedBase = null;
         startButton.hidden = false;
         startButton.textContent = "計測をやり直す";
-        setPrompt(`<strong>行列を安定して求められませんでした。</strong> 8方向をもう一度計測してください`);
+        setPrompt("再計測してください");
       }
     }
 
@@ -2101,6 +2439,11 @@
       phase = "idle";
       resultApplied = false;
       lastReplacement = null;
+      resultSamples = [];
+      previousRoundFit = null;
+      stableRoundCount = 0;
+      gestureAttempts = 0;
+      stoppedAtLimit = false;
       sensitivity.disabled = false;
       applyMatrixButton.disabled = !hidDevice?.opened;
       window.clearTimeout(autoApplyTimer);
@@ -2108,29 +2451,38 @@
       currentIndex = 0;
       sumX = 0;
       sumY = 0;
+      pathLength = 0;
       fittedBase = null;
-      roundsSelect.disabled = false;
       clearTimeout(idleTimer);
-      clearTimeout(cooldownTimer);
       if (document.pointerLockElement === stage) document.exitPointerLock();
       if (document.pointerLockElement === previewPad) document.exitPointerLock();
       previewActive = false;
       previewStart.hidden = false;
       previewStart.textContent = "操作感プレビューを開始";
 
-      directionArrow.textContent = "↑";
+      directionArrow.textContent = "→";
       startButton.hidden = false;
-      startButton.textContent = "プロファイルを開始";
+      startButton.textContent = "計測開始";
       stage.classList.add("stage-idle");
       setObservedVector(0, 0);
-      setPrompt("クリック後、矢印方向へ<strong>一度スーッと転がして止める</strong>だけです");
-      if (hideResults) results.classList.remove("visible");
+      setPrompt("");
+      if (hideResults) {
+        results.classList.remove("visible");
+        results.hidden = true;
+        document.getElementById("calibration").hidden = false;
+        document.getElementById("profileCpi").hidden = false;
+      }
       renderDirectionList();
     }
 
     function previewCorrection() {
       if (previewMode === "raw" || !fittedBase || resultApplied) return [[1, 0], [0, 1]];
-      return scaleMatrix(fittedBase, Number(sensitivity.value) / 100);
+      return fittedBase;
+    }
+
+    function previewGain() {
+      if (previewMode === "raw" || !fittedBase || resultApplied) return 1;
+      return Number(sensitivity.value) / 100;
     }
 
     function updatePreviewCursor() {
@@ -2193,7 +2545,8 @@
       const dy = Number(event.movementY) || 0;
       if (dx === 0 && dy === 0) return;
 
-      const transformed = applyMatrix(previewCorrection(), dx, dy);
+      const transformed = applyLengthPreservingMatrix(previewCorrection(), dx, dy)
+        .map(value => value * previewGain());
       const bounds = previewPad.getBoundingClientRect();
       const margin = 11;
       previewX = Math.max(margin, Math.min(bounds.width - margin, previewX + transformed[0]));
@@ -2210,70 +2563,23 @@
       placePreviewTarget();
     }
 
-    function smallestEigenvector(matrix) {
-      const a = matrix.map(row => row.slice());
-      const v = [
-        [1, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-      ];
-
-      for (let iteration = 0; iteration < 80; iteration += 1) {
-        let p = 0;
-        let q = 1;
-        let maximum = Math.abs(a[p][q]);
-        for (let row = 0; row < 4; row += 1) {
-          for (let column = row + 1; column < 4; column += 1) {
-            const value = Math.abs(a[row][column]);
-            if (value > maximum) {
-              maximum = value;
-              p = row;
-              q = column;
-            }
-          }
-        }
-        if (maximum < 1e-12) break;
-
-        const angle = 0.5 * Math.atan2(2 * a[p][q], a[q][q] - a[p][p]);
-        const cosine = Math.cos(angle);
-        const sine = Math.sin(angle);
-
-        for (let k = 0; k < 4; k += 1) {
-          if (k === p || k === q) continue;
-          const akp = a[k][p];
-          const akq = a[k][q];
-          a[k][p] = a[p][k] = cosine * akp - sine * akq;
-          a[k][q] = a[q][k] = sine * akp + cosine * akq;
-        }
-
-        const app = a[p][p];
-        const aqq = a[q][q];
-        const apq = a[p][q];
-        a[p][p] = cosine * cosine * app - 2 * sine * cosine * apq + sine * sine * aqq;
-        a[q][q] = sine * sine * app + 2 * sine * cosine * apq + cosine * cosine * aqq;
-        a[p][q] = a[q][p] = 0;
-
-        for (let k = 0; k < 4; k += 1) {
-          const vkp = v[k][p];
-          const vkq = v[k][q];
-          v[k][p] = cosine * vkp - sine * vkq;
-          v[k][q] = sine * vkp + cosine * vkq;
-        }
-      }
-
-      let smallest = 0;
-      for (let index = 1; index < 4; index += 1) {
-        if (a[index][index] < a[smallest][smallest]) smallest = index;
-      }
-      return v.map(row => row[smallest]);
-    }
-
     function applyMatrix(matrix, x, y) {
       return [
         matrix[0][0] * x + matrix[0][1] * y,
         matrix[1][0] * x + matrix[1][1] * y
       ];
+    }
+
+    function applyLengthPreservingMatrix(matrix, x, y) {
+      const inputLength = Math.hypot(x, y);
+      if (inputLength < 1e-12) return [0, 0];
+
+      const transformed = applyMatrix(matrix, x, y);
+      const transformedLength = Math.hypot(transformed[0], transformed[1]);
+      if (transformedLength < 1e-12) return [0, 0];
+
+      const scale = inputLength / transformedLength;
+      return [transformed[0] * scale, transformed[1] * scale];
     }
 
     function multiplyMatrices(left, right) {
@@ -2301,57 +2607,170 @@
       return Math.acos(cosine);
     }
 
-    function fitCorrection(inputSamples) {
-      let weights = inputSamples.map(() => 1);
-      let fitted = null;
-
-      for (let robustPass = 0; robustPass < 6; robustPass += 1) {
-        const normal = Array.from({ length: 4 }, () => [0, 0, 0, 0]);
-
-        inputSamples.forEach((sample, index) => {
+    function robustAxis(inputSamples, axis) {
+      const aligned = inputSamples
+        .filter(sample => axis === "x" ? Math.abs(sample.tx) > 0.5 : Math.abs(sample.ty) > 0.5)
+        .map(sample => {
           const length = Math.hypot(sample.dx, sample.dy);
-          if (length < 1e-9) return;
-          const x = sample.dx / length;
-          const y = sample.dy / length;
-          const row = [
-            -sample.ty * x,
-            -sample.ty * y,
-            sample.tx * x,
-            sample.tx * y
-          ];
-          const weight = weights[index];
-          for (let r = 0; r < 4; r += 1) {
-            for (let c = 0; c < 4; c += 1) {
-              normal[r][c] += weight * row[r] * row[c];
-            }
-          }
+          if (length < 1e-9) return null;
+          const sign = axis === "x" ? Math.sign(sample.tx) : Math.sign(sample.ty);
+          return {
+            x: sample.dx / length * sign,
+            y: sample.dy / length * sign,
+            quality: Math.max(0.25, Math.min(1, sample.straightness ?? 1))
+          };
+        })
+        .filter(Boolean);
+
+      if (aligned.length < 2) throw new Error(`Not enough ${axis}-axis samples`);
+
+      let x = aligned.reduce((sum, sample) => sum + sample.x, 0);
+      let y = aligned.reduce((sum, sample) => sum + sample.y, 0);
+      let length = Math.hypot(x, y);
+      if (length < 1e-9) throw new Error(`Unstable ${axis}-axis samples`);
+      x /= length;
+      y /= length;
+
+      const huber = 8 * Math.PI / 180;
+      for (let pass = 0; pass < 8; pass += 1) {
+        let weightedX = 0;
+        let weightedY = 0;
+        let totalWeight = 0;
+        aligned.forEach(sample => {
+          const cosine = Math.max(-1, Math.min(1, x * sample.x + y * sample.y));
+          const error = Math.acos(cosine);
+          const robustWeight = error <= huber ? 1 : huber / error;
+          const weight = sample.quality * robustWeight;
+          weightedX += sample.x * weight;
+          weightedY += sample.y * weight;
+          totalWeight += weight;
         });
-
-        const vector = smallestEigenvector(normal);
-        fitted = [
-          [vector[0], vector[1]],
-          [vector[2], vector[3]]
-        ];
-
-        const orientation = inputSamples.reduce((total, sample) => {
-          const [x, y] = applyMatrix(fitted, sample.dx, sample.dy);
-          const length = Math.hypot(x, y) || 1;
-          return total + (x * sample.tx + y * sample.ty) / length;
-        }, 0);
-        if (orientation < 0) fitted = scaleMatrix(fitted, -1);
-
-        const determinant = fitted[0][0] * fitted[1][1] - fitted[0][1] * fitted[1][0];
-        if (Math.abs(determinant) < 1e-8) throw new Error("Degenerate profile");
-        fitted = scaleMatrix(fitted, 1 / Math.sqrt(Math.abs(determinant)));
-
-        const huber = 10 * Math.PI / 180;
-        weights = inputSamples.map(sample => {
-          const error = angleError(fitted, sample);
-          return error <= huber ? 1 : huber / error;
-        });
+        length = Math.hypot(weightedX, weightedY);
+        if (totalWeight < 1e-9 || length < 1e-9) {
+          throw new Error(`Unstable ${axis}-axis fit`);
+        }
+        x = weightedX / length;
+        y = weightedY / length;
       }
 
+      return [x, y];
+    }
+
+    function fitCorrection(inputSamples) {
+      const horizontal = robustAxis(inputSamples, "x");
+      const vertical = robustAxis(inputSamples, "y");
+      const basisDeterminant = horizontal[0] * vertical[1] - horizontal[1] * vertical[0];
+
+      if (Math.abs(basisDeterminant) < 0.25) {
+        throw new Error("Measured axes are too close together");
+      }
+
+      let fitted = [
+        [vertical[1] / basisDeterminant, -vertical[0] / basisDeterminant],
+        [-horizontal[1] / basisDeterminant, horizontal[0] / basisDeterminant]
+      ];
+
+      const determinant = fitted[0][0] * fitted[1][1] - fitted[0][1] * fitted[1][0];
+      fitted = scaleMatrix(fitted, 1 / Math.sqrt(Math.abs(determinant)));
       return fitted;
+    }
+
+    function median(values) {
+      if (!values.length) return Infinity;
+      const sorted = values.slice().sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+
+    function classifyInliers(inputSamples, matrix) {
+      const errors = inputSamples.map(sample => angleError(matrix, sample) * 180 / Math.PI);
+      const center = median(errors);
+      const mad = median(errors.map(error => Math.abs(error - center)));
+      const threshold = Math.max(5, Math.min(15, center + Math.max(2, 3 * 1.4826 * mad)));
+      const inliers = inputSamples.filter((sample, index) => errors[index] <= threshold);
+      return { inliers, errors, threshold };
+    }
+
+    function fitReliableCorrection(inputSamples) {
+      if (inputSamples.length < directions.length) throw new Error("Not enough samples");
+
+      let matrix = fitCorrection(inputSamples);
+      let inliers = inputSamples.slice();
+      let previousSignature = "";
+
+      for (let pass = 0; pass < 3; pass += 1) {
+        const classified = classifyInliers(inputSamples, matrix);
+        const horizontalCount = classified.inliers.filter(sample => Math.abs(sample.tx) > 0.5).length;
+        const verticalCount = classified.inliers.filter(sample => Math.abs(sample.ty) > 0.5).length;
+        if (horizontalCount < 2 || verticalCount < 2) break;
+
+        const signature = classified.inliers.map(sample => inputSamples.indexOf(sample)).join(",");
+        inliers = classified.inliers;
+        matrix = fitCorrection(inliers);
+        if (signature === previousSignature) break;
+        previousSignature = signature;
+      }
+
+      const finalClassified = classifyInliers(inputSamples, matrix);
+      const finalHorizontalCount = finalClassified.inliers.filter(sample => Math.abs(sample.tx) > 0.5).length;
+      const finalVerticalCount = finalClassified.inliers.filter(sample => Math.abs(sample.ty) > 0.5).length;
+      if (finalHorizontalCount >= 2 && finalVerticalCount >= 2) {
+        inliers = finalClassified.inliers;
+        matrix = fitCorrection(inliers);
+      }
+
+      return {
+        matrix,
+        inliers,
+        excluded: inputSamples.length - inliers.length,
+        threshold: finalClassified.threshold,
+        rms: rmsAngle(matrix, inliers)
+      };
+    }
+
+    function matrixDriftDegrees(previous, current, inputSamples) {
+      if (!previous || !inputSamples.length) return Infinity;
+      const changes = inputSamples.map(sample => {
+        const before = applyMatrix(previous, sample.dx, sample.dy);
+        const after = applyMatrix(current, sample.dx, sample.dy);
+        const denominator = Math.hypot(...before) * Math.hypot(...after);
+        if (denominator < 1e-9) return 180;
+        const cosine = Math.max(
+          -1,
+          Math.min(1, (before[0] * after[0] + before[1] * after[1]) / denominator)
+        );
+        return Math.acos(cosine) * 180 / Math.PI;
+      });
+      return median(changes);
+    }
+
+    function assessCompletedRound() {
+      const assessment = fitReliableCorrection(samples);
+      const completedRounds = samples.length / directions.length;
+      const directionCounts = directions.map((direction, index) =>
+        assessment.inliers.filter(sample => sample.directionIndex === index).length
+      );
+      const drift = matrixDriftDegrees(previousRoundFit, assessment.matrix, assessment.inliers);
+      const enoughInliers = completedRounds >= MIN_ROUNDS
+        && directionCounts.every(count => count >= MIN_INLIERS_PER_DIRECTION);
+      const precise = assessment.rms <= TARGET_RMS_DEGREES;
+      const stable = drift <= MAX_FIT_DRIFT_DEGREES;
+
+      stableRoundCount = enoughInliers && precise && stable ? stableRoundCount + 1 : 0;
+      previousRoundFit = assessment.matrix.map(row => row.slice());
+
+      return {
+        ...assessment,
+        completedRounds,
+        directionCounts,
+        drift,
+        enoughInliers,
+        precise,
+        stable,
+        converged: stableRoundCount >= REQUIRED_STABLE_ROUNDS
+      };
     }
 
     function currentFirmwareMatrix() {
@@ -2363,8 +2782,9 @@
       return [[values[0], values[1]], [values[2], values[3]]];
     }
 
-    function rmsAngle(matrix) {
-      const radians = samples.map(sample => angleError(matrix, sample));
+    function rmsAngle(matrix, inputSamples = samples) {
+      if (!inputSamples.length) return Infinity;
+      const radians = inputSamples.map(sample => angleError(matrix, sample));
       return Math.sqrt(radians.reduce((sum, value) => sum + value * value, 0) / radians.length) * 180 / Math.PI;
     }
 
@@ -2403,19 +2823,67 @@
       const scale = 1000;
       const values = matrix.map(row => row.map(value => Math.round(value * scale)));
       return `pub const MATRIX_SCALE: i64 = ${scale};
+const LENGTH_SCALE: i64 = 64;
 pub const MATRIX_M00: i64 = ${values[0][0]};
 pub const MATRIX_M01: i64 = ${values[0][1]};
 pub const MATRIX_M10: i64 = ${values[1][0]};
 pub const MATRIX_M11: i64 = ${values[1][1]};
 
-let output_x_numerator =
+fn integer_sqrt(value: u64) -> u64 {
+    if value == 0 {
+        return 0;
+    }
+    let bit_count = 64 - value.leading_zeros();
+    let mut lower = 0;
+    let mut upper = 1u64 << ((bit_count + 1) / 2);
+    while lower + 1 < upper {
+        let middle = (lower + upper) / 2;
+        if middle <= value / middle { lower = middle; } else { upper = middle; }
+    }
+    lower
+}
+
+fn normalize_component(component: i64, raw_length_scaled: u64, transformed_length: u64) -> i64 {
+    let numerator = i128::from(component) * i128::from(raw_length_scaled) * i128::from(MATRIX_SCALE);
+    let denominator = i128::from(transformed_length) * i128::from(LENGTH_SCALE);
+    (numerator / denominator) as i64
+}
+
+let transformed_x_numerator =
     i64::from(raw_x) * MATRIX_M00
-    + i64::from(raw_y) * MATRIX_M01
-    + self.output_x_remainder;
-let output_y_numerator =
+    + i64::from(raw_y) * MATRIX_M01;
+let transformed_y_numerator =
     i64::from(raw_x) * MATRIX_M10
-    + i64::from(raw_y) * MATRIX_M11
-    + self.output_y_remainder;
+    + i64::from(raw_y) * MATRIX_M11;
+
+let raw_length_squared = {
+    let raw_x = i64::from(raw_x).unsigned_abs();
+    let raw_y = i64::from(raw_y).unsigned_abs();
+    raw_x * raw_x + raw_y * raw_y
+};
+let raw_length_scaled = integer_sqrt(
+    raw_length_squared * (LENGTH_SCALE as u64) * (LENGTH_SCALE as u64),
+);
+let transformed_length_squared = transformed_x_numerator
+    .unsigned_abs()
+    .saturating_mul(transformed_x_numerator.unsigned_abs())
+    .saturating_add(
+        transformed_y_numerator
+            .unsigned_abs()
+            .saturating_mul(transformed_y_numerator.unsigned_abs()),
+    );
+let transformed_length = integer_sqrt(transformed_length_squared);
+let (output_x_numerator, output_y_numerator) = if transformed_length == 0 {
+    (0, 0)
+} else {
+    (
+        normalize_component(transformed_x_numerator, raw_length_scaled, transformed_length),
+        normalize_component(transformed_y_numerator, raw_length_scaled, transformed_length),
+    )
+};
+
+let output_x_numerator = output_x_numerator + self.output_x_remainder;
+let output_y_numerator = output_y_numerator + self.output_y_remainder;
 
 let output_x = output_x_numerator / MATRIX_SCALE;
 let output_y = output_y_numerator / MATRIX_SCALE;
@@ -2429,6 +2897,7 @@ self.output_y_remainder =
     function plotResults(correction) {
       const plot = document.getElementById("resultPlot");
       const radius = 132;
+      const plottedSamples = resultSamples.length ? resultSamples : samples;
       const background = directions.map(direction => {
         const x = direction.x * radius;
         const y = direction.y * radius;
@@ -2438,7 +2907,7 @@ self.output_y_remainder =
       }).join("");
 
       const vectors = directions.map((direction, index) => {
-        const group = samples.filter(sample => sample.directionIndex === index);
+        const group = plottedSamples.filter(sample => sample.directionIndex === index);
         const average = group.reduce((total, sample) => {
           const length = Math.hypot(sample.dx, sample.dy) || 1;
           total[0] += sample.dx / length;
@@ -2492,8 +2961,9 @@ self.output_y_remainder =
       const correction = scaleMatrix(fittedBase, gain);
       const replacement = multiplyMatrices(correction, firmware);
       const identity = [[1, 0], [0, 1]];
-      const before = rmsAngle(identity);
-      const after = rmsAngle(correction);
+      const evaluatedSamples = resultSamples.length ? resultSamples : samples;
+      const before = rmsAngle(identity, evaluatedSamples);
+      const after = rmsAngle(correction, evaluatedSamples);
       const rotation = closestRotation(fittedBase);
 
       renderMatrix("correctionMatrix", correction);
@@ -2506,10 +2976,14 @@ self.output_y_remainder =
 
       const confidence = document.getElementById("confidence");
       const resultSummary = document.getElementById("resultSummary");
-      if (after <= 4) {
+      if (stoppedAtLimit) {
+        confidence.textContent = "CHECK";
+        confidence.style.background = "#c47b22";
+        resultSummary.textContent = "上限まで計測しました";
+      } else if (after <= 4) {
         confidence.textContent = "HIGH FIT";
         confidence.style.background = "#007f7b";
-        resultSummary.textContent = "8方向がきれいに揃いました";
+        resultSummary.textContent = "左右・上下が揃いました";
       } else if (after <= 8) {
         confidence.textContent = "GOOD FIT";
         confidence.style.background = "#4f7f3d";
@@ -2523,6 +2997,9 @@ self.output_y_remainder =
         confidence.style.background = "#c84f3d";
         resultSummary.textContent = "計測のばらつきが大きいため、再計測を推奨します";
       }
+      if (resultSamples.length && resultSamples.length < samples.length) {
+        resultSummary.textContent += `（${samples.length}回中${resultSamples.length}回を採用）`;
+      }
 
       const code = buildCode(replacement);
       document.getElementById("codeOutput").textContent = code;
@@ -2533,7 +3010,11 @@ self.output_y_remainder =
         replacement: matrixText(replacement),
         code
       };
-      scheduleAutoApply(replacement);
+      if (stoppedAtLimit) {
+        window.clearTimeout(autoApplyTimer);
+      } else {
+        scheduleAutoApply(replacement);
+      }
     }
 
     async function copyText(text) {
@@ -2560,6 +3041,7 @@ self.output_y_remainder =
 
     startButton.addEventListener("click", requestCapture);
     resetButton.addEventListener("click", () => resetSession(true));
+    resultResetButton.addEventListener("click", () => resetSession(true));
     connectDeviceButton.addEventListener("click", connectOrDisconnectDevice);
     readMatrixButton.addEventListener("click", async () => {
       readMatrixButton.disabled = true;
@@ -2583,12 +3065,13 @@ self.output_y_remainder =
         applyMatrixButton.disabled = !hidDevice?.opened || resultApplied;
       }
     });
-    autoApply.addEventListener("change", () => {
-      if (autoApply.checked && lastReplacement && !resultApplied) {
-        scheduleAutoApply(lastReplacement);
-      } else {
-        window.clearTimeout(autoApplyTimer);
-      }
+    profileCpiProfile.addEventListener("change", renderProfileCpiControl);
+    profileCpiSlider.addEventListener("input", () => {
+      const profile = Number(profileCpiProfile.value);
+      const cpi = Number(profileCpiSlider.value);
+      profileCpiValues[profile] = cpi;
+      profileCpiValue.textContent = `${cpi} CPI`;
+      scheduleProfileCpiSave();
     });
     if ("hid" in navigator) {
       navigator.hid.addEventListener("disconnect", event => {
@@ -2596,6 +3079,8 @@ self.output_y_remainder =
         cancelPendingHidRequest("ReeLとの接続が切れました");
         hidDevice = null;
         calibrationMacroOffset = null;
+        profileCpiMacroOffset = null;
+        window.clearTimeout(profileCpiSaveTimer);
         setDeviceState("idle", "RMK 未接続", "ReeLとの接続が切れました。");
       });
     }
@@ -2632,21 +3117,16 @@ self.output_y_remainder =
       if (active) {
         phase = "paused";
         clearTimeout(idleTimer);
-        clearTimeout(cooldownTimer);
         startButton.hidden = false;
         startButton.textContent = "計測を再開";
         stage.classList.add("stage-idle");
-        setPrompt("<strong>計測を一時停止しました。</strong> ボタンから再開できます");
+        setPrompt("一時停止");
       }
     });
 
     sensitivity.addEventListener("input", () => {
       sensitivityValue.textContent = `${(Number(sensitivity.value) / 100).toFixed(2)}×`;
       renderResults();
-    });
-
-    roundsSelect.addEventListener("change", () => {
-      resetSession(true);
     });
 
     ["f00", "f01", "f10", "f11"].forEach(id => {
@@ -2680,13 +3160,22 @@ self.output_y_remainder =
       applyMatrix,
       multiplyMatrices,
       angleError,
+      fitReliableCorrection,
+      classifyInliers,
+      matrixDriftDegrees,
+      applyLengthPreservingMatrix,
       fnv1a,
       encodeCalibrationBlob,
       decodeCalibrationBlob,
+      encodeProfileCpiBlob,
+      decodeProfileCpiBlob,
       defaultFirmwareMatrix: DEFAULT_FIRMWARE_MATRIX,
+      defaultProfileCpi: DEFAULT_PROFILE_CPI,
       directions
     };
 
+    profileCpiValues = [...DEFAULT_PROFILE_CPI];
+    renderProfileCpiControl();
     renderDirectionList();
     reconnectAuthorizedDevice();
   </script>
