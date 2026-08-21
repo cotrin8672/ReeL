@@ -12,6 +12,7 @@ on:
       - "memory.x"
       - "rust-toolchain.toml"
       - "tools/trackball-profiler.html"
+      - "tools/rotary-decoder-tests/**"
       - "vial.json"
   pull_request:
     paths:
@@ -24,6 +25,7 @@ on:
       - "memory.x"
       - "rust-toolchain.toml"
       - "tools/trackball-profiler.html"
+      - "tools/rotary-decoder-tests/**"
       - "vial.json"
   workflow_dispatch:
 
@@ -52,6 +54,13 @@ jobs:
           if (!match) throw new Error("inline script not found");
           new Function(match[1]);
           NODE
+
+      - name: Test rotary decoder waveforms
+        run: >-
+          cargo test
+          --manifest-path tools/rotary-decoder-tests/Cargo.toml
+          --target x86_64-unknown-linux-gnu
+          --locked
 
       - name: Install firmware conversion tools
         run: cargo install cargo-binutils cargo-hex-to-uf2 --locked
