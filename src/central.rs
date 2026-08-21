@@ -7,6 +7,7 @@ mod macros;
 mod calibration_config;
 mod motion_gain;
 mod mouse_layer_priority;
+mod profile_cpi_config;
 mod quick_mod_tap;
 mod sharp_lcd;
 mod smart_aml_trigger;
@@ -58,6 +59,9 @@ use rmk::{
 use static_cell::StaticCell;
 
 use mouse_layer_priority::{AUTO_MOUSE_LAYER, MouseLayerPriority};
+use profile_cpi_config::{
+    PROFILE_CPI_FLASH_SIZE, PROFILE_CPI_FLASH_START, ProfileCpiConfigWatcher,
+};
 use quick_mod_tap::QuickModTap;
 use sharp_lcd::new_status_lcd;
 use smart_aml_trigger::SmartAutoMouseTrigger;
@@ -197,6 +201,11 @@ async fn main(spawner: Spawner) {
         CALIBRATION_FLASH_START,
         CALIBRATION_FLASH_SIZE,
     );
+    let profile_cpi_flash = Partition::new(
+        shared_flash,
+        PROFILE_CPI_FLASH_START,
+        PROFILE_CPI_FLASH_SIZE,
+    );
 
     let (row_pins, col_pins) = config_matrix_pins_nrf!(
         peripherals: p,
@@ -277,6 +286,9 @@ async fn main(spawner: Spawner) {
         migration_matrix,
     );
     calibration_config.initialize().await;
+    let mut profile_cpi_config =
+        ProfileCpiConfigWatcher::new(&host_context, profile_cpi_flash, TRACKBALL_DEVICE_ID);
+    profile_cpi_config.initialize().await;
     let mut host_service = HostService::new(&host_context, &rmk_config);
 
     let pmw_sck = Output::new(p.P1_13, Level::High, OutputDrive::Standard);
@@ -321,6 +333,7 @@ async fn main(spawner: Spawner) {
             pointing_processor,
             auto_mouse_layer,
             calibration_config,
+            profile_cpi_config,
             storage,
             usb_transport,
             ble_transport,

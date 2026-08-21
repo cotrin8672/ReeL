@@ -58,12 +58,22 @@ The script fails on ambiguous matrix wiring or an unsupported physical
 arrangement, so a new or removed switch cannot silently disappear from Vial.
 Use `--check` to verify that the checked-in JSON is current without writing it.
 
-## Browser trackball calibration
+## Browser tuning console
 
 Open `tools/trackball-profiler.html` in Chrome or Edge and select
 **ワイヤレス接続**. The profiler uses RMK's existing vendor-defined Vial HID
 collection, so the same page works through either USB or the bonded BLE
 keyboard connection.
+
+The console exposes one PMW3610 CPI value for each of RMK's five Bluetooth
+profiles through a profile selector and a 200-step slider. Changes are saved
+automatically after a short debounce and update the active profile within 25 ms;
+switching Bluetooth profiles applies that profile's stored CPI automatically.
+
+The 24 bytes immediately before the calibration record in RMK's macro buffer
+are reserved for a versioned `RCP1` profile-CPI record. It contains five
+little-endian CPI values and an FNV-1a checksum. The central mirrors valid
+records into a wear-levelled flash journal at `0xA7000`.
 
 The last 28 bytes of RMK's macro buffer are reserved for a versioned `RLC1`
 calibration record. The record contains the four fixed-point matrix
