@@ -17,7 +17,6 @@ pub enum TrackingResult {
     Detent(DetentDirection),
 }
 
-const INTERMEDIATE_STABLE_SAMPLES: u8 = 2;
 const DETENT_STABLE_SAMPLES: u8 = 10;
 
 /// Tracks one half-pulse of a 9-pulse/18-click encoder.
@@ -27,23 +26,17 @@ const DETENT_STABLE_SAMPLES: u8 = 10;
 /// emitted after the opposite detent (`00` or `11`) remains stable.
 pub struct DetentTracker {
     origin: u8,
-    wake_phase: Option<EncoderPhase>,
-    leader: Option<EncoderPhase>,
-    intermediate: Option<EncoderPhase>,
-    intermediate_samples: u8,
+    leader: EncoderPhase,
     origin_samples: u8,
     target_samples: u8,
     finished: bool,
 }
 
 impl DetentTracker {
-    pub const fn new(origin: u8, wake_phase: EncoderPhase) -> Self {
+    pub const fn new(origin: u8, captured_phase: EncoderPhase) -> Self {
         Self {
             origin,
-            wake_phase: Some(wake_phase),
-            leader: None,
-            intermediate: None,
-            intermediate_samples: 0,
+            leader: captured_phase,
             origin_samples: 0,
             target_samples: 0,
             finished: false,
@@ -59,26 +52,20 @@ impl DetentTracker {
         let target = self.origin ^ 0b11;
 
         if state == self.origin {
-            // A sampled return to the starting detent means the first edge was
-            // bounce. Let a subsequent departure choose the leader again.
-            self.wake_phase = None;
-            self.leader = None;
-            self.intermediate = None;
-            self.intermediate_samples = 0;
+            // Keep the hardware-captured leader through short contact bounce.
+            // A stable return cancels this attempt; the caller then rearms PPI
+            // before accepting a different leader.
             self.target_samples = 0;
             self.origin_samples = self.origin_samples.saturating_add(1);
-            return if self.origin_samples >= DETENT_STABLE_SAMPLES {
-                TrackingResult::Cancelled
-            } else {
-                TrackingResult::InProgress
-            };
+            if self.origin_samples >= DETENT_STABLE_SAMPLES {
+                self.finished = true;
+                return TrackingResult::Cancelled;
+            }
+            return TrackingResult::InProgress;
         }
 
         self.origin_samples = 0;
         if state == target {
-            if self.leader.is_none() {
-                self.leader = self.intermediate.or(self.wake_phase);
-            }
             self.target_samples = self.target_samples.saturating_add(1);
             if self.target_samples < DETENT_STABLE_SAMPLES {
                 return TrackingResult::InProgress;
@@ -86,27 +73,12 @@ impl DetentTracker {
 
             self.finished = true;
             return match self.leader {
-                Some(EncoderPhase::A) => TrackingResult::Detent(DetentDirection::Negative),
-                Some(EncoderPhase::B) => TrackingResult::Detent(DetentDirection::Positive),
-                None => TrackingResult::Cancelled,
+                EncoderPhase::A => TrackingResult::Detent(DetentDirection::Negative),
+                EncoderPhase::B => TrackingResult::Detent(DetentDirection::Positive),
             };
         }
 
         self.target_samples = 0;
-        let phase = if state ^ self.origin == 0b10 {
-            EncoderPhase::A
-        } else {
-            EncoderPhase::B
-        };
-        if self.intermediate == Some(phase) {
-            self.intermediate_samples = self.intermediate_samples.saturating_add(1);
-        } else {
-            self.intermediate = Some(phase);
-            self.intermediate_samples = 1;
-        }
-        if self.leader.is_none() && self.intermediate_samples >= INTERMEDIATE_STABLE_SAMPLES {
-            self.leader = Some(phase);
-        }
         TrackingResult::InProgress
     }
 }
@@ -247,15 +219,38 @@ mod tests {
     }
 
     #[test]
-    fn returning_to_origin_allows_a_real_reversal_without_old_direction_leak() {
-        let mut tracker = DetentTracker::new(HIGH_DETENT, EncoderPhase::A);
-        sample_state(&mut tracker, 0b01);
-        sample_state(&mut tracker, 0b01);
-        sample_state(&mut tracker, HIGH_DETENT);
-        sample_state(&mut tracker, 0b10);
-        sample_state(&mut tracker, 0b10);
+    fn sampled_states_cannot_replace_the_hardware_captured_leader() {
+        for origin in [HIGH_DETENT, LOW_DETENT] {
+            for (captured, sampled, expected) in [
+                (EncoderPhase::A, EncoderPhase::B, DetentDirection::Negative),
+                (EncoderPhase::B, EncoderPhase::A, DetentDirection::Positive),
+            ] {
+                let mut tracker = DetentTracker::new(origin, captured);
+                sample_state(&mut tracker, intermediate(origin, sampled));
+                sample_state(&mut tracker, origin);
+                sample_state(&mut tracker, intermediate(origin, sampled));
+                sample_state(&mut tracker, intermediate(origin, sampled));
+                assert_eq!(
+                    settle(&mut tracker, origin ^ 0b11),
+                    TrackingResult::Detent(expected),
+                    "origin={origin:02b}, captured={captured:?}, sampled={sampled:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn stable_return_rearms_before_accepting_a_real_reversal() {
+        let mut first_attempt = DetentTracker::new(HIGH_DETENT, EncoderPhase::A);
+        sample_state(&mut first_attempt, 0b01);
         assert_eq!(
-            settle(&mut tracker, LOW_DETENT),
+            settle(&mut first_attempt, HIGH_DETENT),
+            TrackingResult::Cancelled
+        );
+
+        let mut rearmed = DetentTracker::new(HIGH_DETENT, EncoderPhase::B);
+        assert_eq!(
+            settle(&mut rearmed, LOW_DETENT),
             TrackingResult::Detent(DetentDirection::Positive)
         );
     }

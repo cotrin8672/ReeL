@@ -195,8 +195,8 @@ impl Runnable for LeftRotaryEncoder {
             }
 
             self.arm_first_edge_capture();
-            let wake_phase = self.wait_for_first_edge().await;
-            let mut tracker = DetentTracker::new(self.confirmed_state, wake_phase);
+            let captured_phase = self.wait_for_first_edge().await;
+            let mut tracker = DetentTracker::new(self.confirmed_state, captured_phase);
 
             loop {
                 Timer::after_micros(ENCODER_POLL_US).await;
