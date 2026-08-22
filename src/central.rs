@@ -5,6 +5,7 @@ mod keymap;
 #[macro_use]
 mod macros;
 mod calibration_config;
+mod motion_chunk;
 mod motion_gain;
 mod mouse_layer_priority;
 mod profile_cpi_config;
