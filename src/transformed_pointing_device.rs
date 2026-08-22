@@ -7,6 +7,7 @@ use rmk::input_device::pointing::{InitState, PointingDriver};
 use rmk::macros::input_device;
 
 use crate::calibration_config::current_matrix;
+use crate::motion_chunk::take_proportional_i8_chunk;
 use crate::motion_gain::MotionGain;
 use crate::trackball_transform::TrackballTransform;
 
@@ -119,11 +120,10 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             return None;
         }
 
-        // RMK's MouseReport uses i8 relative axes. Emit a bounded chunk and
-        // retain the remainder so fast motion is represented by later HID
-        // reports rather than being clamped away.
-        let x = take_i8_chunk(&mut self.pending_report_x);
-        let y = take_i8_chunk(&mut self.pending_report_y);
+        // RMK's MouseReport uses i8 relative axes. Split both axes across the
+        // same number of reports so every chunk preserves the vector direction.
+        let (x, y) =
+            take_proportional_i8_chunk(&mut self.pending_report_x, &mut self.pending_report_y);
 
         Some(PointingEvent {
             device_id: self.id,
@@ -165,6 +165,16 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         }
 
         loop {
+            // A transformed vector may need multiple i8 HID reports. Drain its
+            // proportional chunks immediately; the transport provides any
+            // required backpressure. The 125 Hz deadline still controls when a
+            // new accumulated sensor vector is transformed.
+            if self.pending_report_x != 0 || self.pending_report_y != 0 {
+                if let Some(event) = self.take_report_event() {
+                    return event;
+                }
+            }
+
             // Check the deadline before waiting for another sensor edge. This
             // is also the tie-breaker when MOTION remains asserted and both
             // futures are ready.
@@ -223,10 +233,4 @@ fn take_i16_chunk(value: &mut i32) -> i16 {
     let chunk = (*value).clamp(i32::from(i16::MIN), i32::from(i16::MAX));
     *value -= chunk;
     chunk as i16
-}
-
-fn take_i8_chunk(value: &mut i32) -> i8 {
-    let chunk = (*value).clamp(i32::from(i8::MIN), i32::from(i8::MAX));
-    *value -= chunk;
-    chunk as i8
 }
