@@ -1,13 +1,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EncoderPhase {
-    A,
-    B,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DetentDirection {
-    Positive,
-    Negative,
+    Clockwise,
+    CounterClockwise,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,316 +11,154 @@ pub enum TrackingResult {
     Detent(DetentDirection),
 }
 
-const DETENT_STABLE_SAMPLES: u8 = 10;
+// The encoder specification permits up to 3 ms of contact chatter. The
+// runtime samples every 100 us, so 30 consecutive samples confirms an A edge.
+const A_STABLE_SAMPLES: u8 = 30;
 
-/// Tracks one half-pulse of a 9-pulse/18-click encoder.
+/// Debounces one edge of phase A.
 ///
-/// Direction is determined by the first contact that leaves the current
-/// detent. Later contact bounce cannot reverse that decision. A click is only
-/// emitted after the opposite detent (`00` or `11`) remains stable.
-pub struct DetentTracker {
-    origin: u8,
-    leader: EncoderPhase,
-    origin_samples: u8,
-    target_samples: u8,
+/// This encoder has 9 A pulses and 18 detents per revolution, so every
+/// confirmed rising or falling A edge is exactly one click. Direction is
+/// decoded from the level of B captured when that A edge first occurred:
+///
+/// CW:  A 0->1 with B=0, or A 1->0 with B=1
+/// CCW: A 0->1 with B=1, or A 1->0 with B=0
+pub struct AEdgeTracker {
+    original_a_high: bool,
+    b_high_at_edge: bool,
+    original_samples: u8,
+    changed_samples: u8,
     finished: bool,
 }
 
-impl DetentTracker {
-    pub const fn new(origin: u8, captured_phase: EncoderPhase) -> Self {
+impl AEdgeTracker {
+    pub const fn new(original_a_high: bool, b_high_at_edge: bool) -> Self {
         Self {
-            origin,
-            leader: captured_phase,
-            origin_samples: 0,
-            target_samples: 0,
+            original_a_high,
+            b_high_at_edge,
+            original_samples: 0,
+            changed_samples: 0,
             finished: false,
         }
     }
 
-    pub fn sample(&mut self, a_high: bool, b_high: bool) -> TrackingResult {
+    pub fn sample(&mut self, a_high: bool) -> TrackingResult {
         if self.finished {
             return TrackingResult::Cancelled;
         }
 
-        let state = state_from_pins(a_high, b_high);
-        let target = self.origin ^ 0b11;
-
-        if state == self.origin {
-            // Keep the hardware-captured leader through short contact bounce.
-            // A stable return cancels this attempt; the caller then rearms PPI
-            // before accepting a different leader.
-            self.target_samples = 0;
-            self.origin_samples = self.origin_samples.saturating_add(1);
-            if self.origin_samples >= DETENT_STABLE_SAMPLES {
+        if a_high == self.original_a_high {
+            self.changed_samples = 0;
+            self.original_samples = self.original_samples.saturating_add(1);
+            if self.original_samples >= A_STABLE_SAMPLES {
                 self.finished = true;
                 return TrackingResult::Cancelled;
             }
             return TrackingResult::InProgress;
         }
 
-        self.origin_samples = 0;
-        if state == target {
-            self.target_samples = self.target_samples.saturating_add(1);
-            if self.target_samples < DETENT_STABLE_SAMPLES {
-                return TrackingResult::InProgress;
-            }
-
-            self.finished = true;
-            return match self.leader {
-                EncoderPhase::A => TrackingResult::Detent(DetentDirection::Negative),
-                EncoderPhase::B => TrackingResult::Detent(DetentDirection::Positive),
-            };
+        self.original_samples = 0;
+        self.changed_samples = self.changed_samples.saturating_add(1);
+        if self.changed_samples < A_STABLE_SAMPLES {
+            return TrackingResult::InProgress;
         }
 
-        self.target_samples = 0;
-        TrackingResult::InProgress
+        self.finished = true;
+        TrackingResult::Detent(direction_from_a_edge(a_high, self.b_high_at_edge))
     }
 }
 
-pub const fn state_from_pins(a_high: bool, b_high: bool) -> u8 {
-    ((a_high as u8) << 1) | b_high as u8
-}
-
-pub const fn is_detent_state(state: u8) -> bool {
-    matches!(state, 0b00 | 0b11)
-}
-
-pub const fn first_captured_phase(
-    a_timestamp: Option<u32>,
-    b_timestamp: Option<u32>,
-) -> Option<EncoderPhase> {
-    match (a_timestamp, b_timestamp) {
-        (Some(a), Some(b)) if b < a => Some(EncoderPhase::B),
-        (Some(_), _) => Some(EncoderPhase::A),
-        (None, Some(_)) => Some(EncoderPhase::B),
-        (None, None) => None,
+/// Direction truth table from the encoder specification.
+pub const fn direction_from_a_edge(
+    a_high_after_edge: bool,
+    b_high_at_edge: bool,
+) -> DetentDirection {
+    if a_high_after_edge != b_high_at_edge {
+        DetentDirection::Clockwise
+    } else {
+        DetentDirection::CounterClockwise
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DetentDirection, DetentTracker, EncoderPhase, TrackingResult, first_captured_phase,
-    };
+    use super::{AEdgeTracker, DetentDirection, TrackingResult, direction_from_a_edge};
 
-    const HIGH_DETENT: u8 = 0b11;
-    const LOW_DETENT: u8 = 0b00;
-
-    fn sample_state(tracker: &mut DetentTracker, state: u8) -> TrackingResult {
-        tracker.sample(state & 0b10 != 0, state & 0b01 != 0)
-    }
-
-    fn settle(tracker: &mut DetentTracker, state: u8) -> TrackingResult {
+    fn settle_changed(tracker: &mut AEdgeTracker, changed_a_high: bool) -> TrackingResult {
         let mut result = TrackingResult::InProgress;
-        for _ in 0..10 {
-            result = sample_state(tracker, state);
+        for _ in 0..30 {
+            result = tracker.sample(changed_a_high);
         }
         result
     }
 
-    fn intermediate(origin: u8, phase: EncoderPhase) -> u8 {
-        origin
-            ^ match phase {
-                EncoderPhase::A => 0b10,
-                EncoderPhase::B => 0b01,
-            }
-    }
-
-    fn run_documented_half_click(origin: u8, leading_phase: EncoderPhase) -> (u8, DetentDirection) {
-        let target = origin ^ 0b11;
-        let mut tracker = DetentTracker::new(origin, leading_phase);
-        let middle = intermediate(origin, leading_phase);
+    #[test]
+    fn implements_the_published_a_edge_b_level_truth_table() {
         assert_eq!(
-            sample_state(&mut tracker, middle),
-            TrackingResult::InProgress
+            direction_from_a_edge(true, false),
+            DetentDirection::Clockwise
         );
         assert_eq!(
-            sample_state(&mut tracker, middle),
-            TrackingResult::InProgress
+            direction_from_a_edge(false, true),
+            DetentDirection::Clockwise
         );
-        let TrackingResult::Detent(direction) = settle(&mut tracker, target) else {
-            panic!("documented half-click did not emit exactly one detent");
-        };
         assert_eq!(
-            sample_state(&mut tracker, target),
-            TrackingResult::Cancelled
+            direction_from_a_edge(true, true),
+            DetentDirection::CounterClockwise
         );
-        (target, direction)
-    }
-
-    #[test]
-    fn documented_clockwise_waveform_emits_18_identical_directions() {
-        let mut state = HIGH_DETENT;
-        for click in 0..18 {
-            let (next, direction) = run_documented_half_click(state, EncoderPhase::A);
-            assert_eq!(direction, DetentDirection::Negative, "click {click}");
-            state = next;
-        }
-        assert_eq!(state, HIGH_DETENT);
-    }
-
-    #[test]
-    fn documented_counterclockwise_waveform_emits_18_identical_directions() {
-        let mut state = HIGH_DETENT;
-        for click in 0..18 {
-            let (next, direction) = run_documented_half_click(state, EncoderPhase::B);
-            assert_eq!(direction, DetentDirection::Positive, "click {click}");
-            state = next;
-        }
-        assert_eq!(state, HIGH_DETENT);
-    }
-
-    #[test]
-    fn both_detent_polarities_use_the_same_direction() {
-        for origin in [HIGH_DETENT, LOW_DETENT] {
-            assert_eq!(
-                run_documented_half_click(origin, EncoderPhase::A).1,
-                DetentDirection::Negative
-            );
-            assert_eq!(
-                run_documented_half_click(origin, EncoderPhase::B).1,
-                DetentDirection::Positive
-            );
-        }
-    }
-
-    #[test]
-    fn opposite_contact_bounce_at_target_cannot_overwrite_the_leader() {
-        for origin in [HIGH_DETENT, LOW_DETENT] {
-            for (leader, opposite, expected) in [
-                (EncoderPhase::A, EncoderPhase::B, DetentDirection::Negative),
-                (EncoderPhase::B, EncoderPhase::A, DetentDirection::Positive),
-            ] {
-                let target = origin ^ 0b11;
-                let mut tracker = DetentTracker::new(origin, leader);
-                sample_state(&mut tracker, intermediate(origin, leader));
-                sample_state(&mut tracker, intermediate(origin, leader));
-                for _ in 0..4 {
-                    sample_state(&mut tracker, target);
-                }
-
-                // This used to overwrite the latched leader and reverse every
-                // other click.
-                sample_state(&mut tracker, intermediate(origin, opposite));
-                sample_state(&mut tracker, intermediate(origin, opposite));
-                assert_eq!(
-                    settle(&mut tracker, target),
-                    TrackingResult::Detent(expected),
-                    "origin={origin:02b}, leader={leader:?}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn sampled_states_cannot_replace_the_hardware_captured_leader() {
-        for origin in [HIGH_DETENT, LOW_DETENT] {
-            for (captured, sampled, expected) in [
-                (EncoderPhase::A, EncoderPhase::B, DetentDirection::Negative),
-                (EncoderPhase::B, EncoderPhase::A, DetentDirection::Positive),
-            ] {
-                let mut tracker = DetentTracker::new(origin, captured);
-                sample_state(&mut tracker, intermediate(origin, sampled));
-                sample_state(&mut tracker, origin);
-                sample_state(&mut tracker, intermediate(origin, sampled));
-                sample_state(&mut tracker, intermediate(origin, sampled));
-                assert_eq!(
-                    settle(&mut tracker, origin ^ 0b11),
-                    TrackingResult::Detent(expected),
-                    "origin={origin:02b}, captured={captured:?}, sampled={sampled:?}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn stable_return_rearms_before_accepting_a_real_reversal() {
-        let mut first_attempt = DetentTracker::new(HIGH_DETENT, EncoderPhase::A);
-        sample_state(&mut first_attempt, 0b01);
         assert_eq!(
-            settle(&mut first_attempt, HIGH_DETENT),
-            TrackingResult::Cancelled
-        );
-
-        let mut rearmed = DetentTracker::new(HIGH_DETENT, EncoderPhase::B);
-        assert_eq!(
-            settle(&mut rearmed, LOW_DETENT),
-            TrackingResult::Detent(DetentDirection::Positive)
+            direction_from_a_edge(false, false),
+            DetentDirection::CounterClockwise
         );
     }
 
     #[test]
-    fn contact_chatter_does_not_emit_or_multiply_clicks() {
-        let mut tracker = DetentTracker::new(HIGH_DETENT, EncoderPhase::A);
+    fn both_a_edges_in_each_pulse_are_clicks_in_the_same_direction() {
+        // CW waveform: 00 -> 10 -> 11 -> 01 -> 00.
+        assert_eq!(
+            settle_changed(&mut AEdgeTracker::new(false, false), true),
+            TrackingResult::Detent(DetentDirection::Clockwise)
+        );
+        assert_eq!(
+            settle_changed(&mut AEdgeTracker::new(true, true), false),
+            TrackingResult::Detent(DetentDirection::Clockwise)
+        );
+
+        // CCW waveform: 00 -> 01 -> 11 -> 10 -> 00.
+        assert_eq!(
+            settle_changed(&mut AEdgeTracker::new(false, true), true),
+            TrackingResult::Detent(DetentDirection::CounterClockwise)
+        );
+        assert_eq!(
+            settle_changed(&mut AEdgeTracker::new(true, false), false),
+            TrackingResult::Detent(DetentDirection::CounterClockwise)
+        );
+    }
+
+    #[test]
+    fn contact_chatter_does_not_emit_an_extra_or_opposite_click() {
+        let mut tracker = AEdgeTracker::new(false, false);
         for _ in 0..8 {
-            assert_eq!(sample_state(&mut tracker, 0b01), TrackingResult::InProgress);
-            assert_eq!(
-                sample_state(&mut tracker, HIGH_DETENT),
-                TrackingResult::InProgress
-            );
+            assert_eq!(tracker.sample(true), TrackingResult::InProgress);
+            assert_eq!(tracker.sample(false), TrackingResult::InProgress);
         }
-        sample_state(&mut tracker, 0b01);
-        sample_state(&mut tracker, 0b01);
         assert_eq!(
-            settle(&mut tracker, LOW_DETENT),
-            TrackingResult::Detent(DetentDirection::Negative)
+            settle_changed(&mut tracker, true),
+            TrackingResult::Detent(DetentDirection::Clockwise)
         );
-        for _ in 0..20 {
-            assert_eq!(
-                sample_state(&mut tracker, LOW_DETENT),
-                TrackingResult::Cancelled
-            );
+        assert_eq!(tracker.sample(false), TrackingResult::Cancelled);
+    }
+
+    #[test]
+    fn an_a_edge_that_settles_back_at_its_original_level_is_cancelled() {
+        let mut tracker = AEdgeTracker::new(false, false);
+        for _ in 0..5 {
+            assert_eq!(tracker.sample(true), TrackingResult::InProgress);
         }
-    }
-
-    #[test]
-    fn a_single_intermediate_sample_still_decodes_fast_rotation() {
-        for (phase, expected) in [
-            (EncoderPhase::A, DetentDirection::Negative),
-            (EncoderPhase::B, DetentDirection::Positive),
-        ] {
-            let mut tracker = DetentTracker::new(HIGH_DETENT, phase);
-            sample_state(&mut tracker, intermediate(HIGH_DETENT, phase));
-            assert_eq!(
-                settle(&mut tracker, LOW_DETENT),
-                TrackingResult::Detent(expected)
-            );
+        let mut result = TrackingResult::InProgress;
+        for _ in 0..30 {
+            result = tracker.sample(false);
         }
-    }
-
-    #[test]
-    fn wake_phase_decodes_when_fast_rotation_skips_the_intermediate_sample() {
-        for (phase, expected) in [
-            (EncoderPhase::A, DetentDirection::Negative),
-            (EncoderPhase::B, DetentDirection::Positive),
-        ] {
-            let mut tracker = DetentTracker::new(HIGH_DETENT, phase);
-            assert_eq!(
-                settle(&mut tracker, LOW_DETENT),
-                TrackingResult::Detent(expected)
-            );
-        }
-    }
-
-    #[test]
-    fn an_edge_that_settles_back_at_origin_is_cancelled() {
-        let mut tracker = DetentTracker::new(HIGH_DETENT, EncoderPhase::A);
-        sample_state(&mut tracker, 0b01);
-        assert_eq!(settle(&mut tracker, HIGH_DETENT), TrackingResult::Cancelled);
-    }
-
-    #[test]
-    fn hardware_capture_order_wins_over_software_poll_order() {
-        assert_eq!(first_captured_phase(Some(10), None), Some(EncoderPhase::A));
-        assert_eq!(first_captured_phase(None, Some(10)), Some(EncoderPhase::B));
-        assert_eq!(
-            first_captured_phase(Some(20), Some(10)),
-            Some(EncoderPhase::B)
-        );
-        assert_eq!(
-            first_captured_phase(Some(10), Some(20)),
-            Some(EncoderPhase::A)
-        );
-        assert_eq!(first_captured_phase(None, None), None);
+        assert_eq!(result, TrackingResult::Cancelled);
     }
 }
