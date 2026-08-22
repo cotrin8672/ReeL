@@ -76,31 +76,36 @@ pub const fn state_from_pins(a_high: bool, b_high: bool) -> u8 {
 mod tests {
     use super::{DetentDirection, HalfStepDecoder};
 
-    fn collect(decoder: &mut HalfStepDecoder, states: &[u8]) -> std::vec::Vec<DetentDirection> {
-        states
-            .iter()
-            .filter_map(|state| decoder.update(*state))
-            .collect()
+    fn assert_sequence(decoder: &mut HalfStepDecoder, states: &[u8], expected: &[DetentDirection]) {
+        let mut expected = expected.iter();
+        for state in states {
+            if let Some(direction) = decoder.update(*state) {
+                assert_eq!(Some(&direction), expected.next());
+            }
+        }
+        assert!(expected.next().is_none());
     }
 
     #[test]
     fn one_electrical_cycle_emits_two_clockwise_detents() {
         let mut decoder = HalfStepDecoder::new(0b00);
-        assert_eq!(
-            collect(&mut decoder, &[0b10, 0b11, 0b01, 0b00]),
-            [DetentDirection::Clockwise, DetentDirection::Clockwise]
+        assert_sequence(
+            &mut decoder,
+            &[0b10, 0b11, 0b01, 0b00],
+            &[DetentDirection::Clockwise, DetentDirection::Clockwise],
         );
     }
 
     #[test]
     fn one_electrical_cycle_emits_two_counter_clockwise_detents() {
         let mut decoder = HalfStepDecoder::new(0b00);
-        assert_eq!(
-            collect(&mut decoder, &[0b01, 0b11, 0b10, 0b00]),
-            [
+        assert_sequence(
+            &mut decoder,
+            &[0b01, 0b11, 0b10, 0b00],
+            &[
                 DetentDirection::CounterClockwise,
-                DetentDirection::CounterClockwise
-            ]
+                DetentDirection::CounterClockwise,
+            ],
         );
     }
 
@@ -111,36 +116,42 @@ mod tests {
             ([0b01, 0b11, 0b10, 0b00], DetentDirection::CounterClockwise),
         ] {
             let mut decoder = HalfStepDecoder::new(0b00);
-            let mut emitted = std::vec::Vec::new();
+            let mut emitted = 0;
             for _ in 0..9 {
-                emitted.extend(collect(&mut decoder, &cycle));
+                for state in cycle {
+                    if let Some(direction) = decoder.update(state) {
+                        assert_eq!(direction, expected);
+                        emitted += 1;
+                    }
+                }
             }
-            assert_eq!(emitted.len(), 18);
-            assert!(emitted.iter().all(|direction| *direction == expected));
+            assert_eq!(emitted, 18);
         }
     }
 
     #[test]
     fn contact_chatter_walks_back_without_emitting() {
         let mut decoder = HalfStepDecoder::new(0b00);
-        assert_eq!(
-            collect(&mut decoder, &[0b10, 0b00, 0b10, 0b00, 0b10, 0b11]),
-            [DetentDirection::Clockwise]
+        assert_sequence(
+            &mut decoder,
+            &[0b10, 0b00, 0b10, 0b00, 0b10, 0b11],
+            &[DetentDirection::Clockwise],
         );
     }
 
     #[test]
     fn reversal_before_a_completed_detent_emits_only_the_new_direction() {
         let mut decoder = HalfStepDecoder::new(0b00);
-        assert_eq!(
-            collect(&mut decoder, &[0b10, 0b00, 0b01, 0b11]),
-            [DetentDirection::CounterClockwise]
+        assert_sequence(
+            &mut decoder,
+            &[0b10, 0b00, 0b01, 0b11],
+            &[DetentDirection::CounterClockwise],
         );
     }
 
     #[test]
     fn invalid_two_bit_jump_does_not_emit() {
         let mut decoder = HalfStepDecoder::new(0b00);
-        assert!(collect(&mut decoder, &[0b11]).is_empty());
+        assert_sequence(&mut decoder, &[0b11], &[]);
     }
 }
