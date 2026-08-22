@@ -26,6 +26,7 @@ use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::embassy_futures::select::select;
 use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
@@ -38,7 +39,7 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
-use rotary_decoder::{AEdgeTracker, DetentDirection, TrackingResult};
+use rotary_decoder::{DetentDirection, HalfStepDecoder, state_from_pins};
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -90,24 +91,26 @@ fn ble_addr() -> [u8; 6] {
     unwrap!(addr.to_le_bytes()[..6].try_into())
 }
 
-const ENCODER_POLL_US: u64 = 100;
-
-/// Decoder for the encoder's documented 9-pulse/18-click waveform. Every
-/// rising or falling edge of A is one click; B at that edge is the direction.
+/// Decoder for the encoder's 9-pulse/18-detent waveform. Direction is accepted
+/// only after a valid half-step Gray-code path completes at 00 or 11.
 struct LeftRotaryEncoder {
     input_a: InputChannel<'static>,
-    input_b: Input<'static>,
-    confirmed_a_high: bool,
+    input_b: InputChannel<'static>,
+    decoder: HalfStepDecoder,
 }
 
 impl LeftRotaryEncoder {
-    fn new(input_a: InputChannel<'static>, input_b: Input<'static>) -> Self {
-        let confirmed_a_high = input_a.pin().is_high();
+    fn new(input_a: InputChannel<'static>, input_b: InputChannel<'static>) -> Self {
+        let pins = state_from_pins(input_a.pin().is_high(), input_b.pin().is_high());
         Self {
             input_a,
             input_b,
-            confirmed_a_high,
+            decoder: HalfStepDecoder::new(pins),
         }
+    }
+
+    fn pin_state(&self) -> u8 {
+        state_from_pins(self.input_a.pin().is_high(), self.input_b.pin().is_high())
     }
 }
 
@@ -130,32 +133,15 @@ async fn encoder_event_task() -> ! {
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
         loop {
-            self.input_a.wait().await;
-            let a_high = self.input_a.pin().is_high();
-            if a_high == self.confirmed_a_high {
-                continue;
-            }
+            let (input_a, input_b) = (&mut self.input_a, &mut self.input_b);
+            select(input_a.wait(), input_b.wait()).await;
 
-            // Latch B at the first A edge, before the A-contact debounce
-            // delay can move the shaft toward B's following edge.
-            let mut tracker = AEdgeTracker::new(self.confirmed_a_high, self.input_b.is_high());
-
-            loop {
-                Timer::after_micros(ENCODER_POLL_US).await;
-                let result = tracker.sample(self.input_a.pin().is_high());
-                match result {
-                    TrackingResult::InProgress => {}
-                    TrackingResult::Cancelled => break,
-                    TrackingResult::Detent(detent) => {
-                        self.confirmed_a_high = !self.confirmed_a_high;
-                        let direction = match detent {
-                            DetentDirection::Clockwise => Direction::Clockwise,
-                            DetentDirection::CounterClockwise => Direction::CounterClockwise,
-                        };
-                        ENCODER_DIRECTION_CHANNEL.send(direction).await;
-                        break;
-                    }
-                }
+            if let Some(detent) = self.decoder.update(self.pin_state()) {
+                let direction = match detent {
+                    DetentDirection::Clockwise => Direction::Clockwise,
+                    DetentDirection::CounterClockwise => Direction::CounterClockwise,
+                };
+                ENCODER_DIRECTION_CHANNEL.send(direction).await;
             }
         }
     }
@@ -240,7 +226,12 @@ async fn main(spawner: Spawner) {
         Pull::Up,
         InputChannelPolarity::Toggle,
     );
-    let encoder_b = Input::new(p.P1_15, Pull::Up);
+    let encoder_b = InputChannel::new(
+        p.GPIOTE_CH1,
+        p.P1_15,
+        Pull::Up,
+        InputChannelPolarity::Toggle,
+    );
     let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);

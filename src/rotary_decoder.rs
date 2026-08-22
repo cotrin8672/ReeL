@@ -4,161 +4,143 @@ pub enum DetentDirection {
     CounterClockwise,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TrackingResult {
-    InProgress,
-    Cancelled,
-    Detent(DetentDirection),
-}
+const DIR_CLOCKWISE: u8 = 0x10;
+const DIR_COUNTER_CLOCKWISE: u8 = 0x20;
+const STATE_MASK: u8 = 0x0f;
+const DIRECTION_MASK: u8 = 0x30;
 
-// The encoder specification permits up to 3 ms of contact chatter. The
-// runtime samples every 100 us, so 30 consecutive samples confirms an A edge.
-const A_STABLE_SAMPLES: u8 = 30;
+const START_00: u8 = 0;
+const CCW_BEGIN: u8 = 1;
+const CW_BEGIN: u8 = 2;
+const START_11: u8 = 3;
+const CW_BEGIN_11: u8 = 4;
+const CCW_BEGIN_11: u8 = 5;
 
-/// Debounces one edge of phase A.
+/// Half-step Gray-code state machine.
 ///
-/// This encoder has 9 A pulses and 18 detents per revolution, so every
-/// confirmed rising or falling A edge is exactly one click. Direction is
-/// decoded from the level of B captured when that A edge first occurred:
-///
-/// CW:  A 0->1 with B=0, or A 1->0 with B=1
-/// CCW: A 0->1 with B=1, or A 1->0 with B=0
-pub struct AEdgeTracker {
-    original_a_high: bool,
-    b_high_at_edge: bool,
-    original_samples: u8,
-    changed_samples: u8,
-    finished: bool,
+/// The 9-pulse/18-detent encoder has a detent at each half-cycle. Phase B is
+/// not specified at the mechanical detent, so its instantaneous level must
+/// not be used to decide direction. This table accepts only a completed valid
+/// Gray-code path to 00 or 11 and naturally walks back on contact chatter.
+const TRANSITIONS: [[u8; 4]; 6] = [
+    // Input state:       00                 01                 10                 11
+    /* START_00 */
+    [START_00, CCW_BEGIN, CW_BEGIN, START_11],
+    /* CCW_BEGIN */
+    [
+        START_00,
+        CCW_BEGIN,
+        START_00,
+        START_11 | DIR_COUNTER_CLOCKWISE,
+    ],
+    /* CW_BEGIN */ [START_00, START_00, CW_BEGIN, START_11 | DIR_CLOCKWISE],
+    /* START_11 */ [START_00, CW_BEGIN_11, CCW_BEGIN_11, START_11],
+    /* CW_BEGIN_11 */ [START_00 | DIR_CLOCKWISE, CW_BEGIN_11, START_11, START_11],
+    /* CCW_BEGIN_11 */
+    [
+        START_00 | DIR_COUNTER_CLOCKWISE,
+        START_11,
+        CCW_BEGIN_11,
+        START_11,
+    ],
+];
+
+pub struct HalfStepDecoder {
+    state: u8,
 }
 
-impl AEdgeTracker {
-    pub const fn new(original_a_high: bool, b_high_at_edge: bool) -> Self {
-        Self {
-            original_a_high,
-            b_high_at_edge,
-            original_samples: 0,
-            changed_samples: 0,
-            finished: false,
-        }
+impl HalfStepDecoder {
+    pub const fn new(initial_pins: u8) -> Self {
+        let state = match initial_pins & 0b11 {
+            0b11 => START_11,
+            _ => START_00,
+        };
+        Self { state }
     }
 
-    pub fn sample(&mut self, a_high: bool) -> TrackingResult {
-        if self.finished {
-            return TrackingResult::Cancelled;
+    pub fn update(&mut self, pins: u8) -> Option<DetentDirection> {
+        self.state = TRANSITIONS[(self.state & STATE_MASK) as usize][(pins & 0b11) as usize];
+        match self.state & DIRECTION_MASK {
+            DIR_CLOCKWISE => Some(DetentDirection::Clockwise),
+            DIR_COUNTER_CLOCKWISE => Some(DetentDirection::CounterClockwise),
+            _ => None,
         }
-
-        if a_high == self.original_a_high {
-            self.changed_samples = 0;
-            self.original_samples = self.original_samples.saturating_add(1);
-            if self.original_samples >= A_STABLE_SAMPLES {
-                self.finished = true;
-                return TrackingResult::Cancelled;
-            }
-            return TrackingResult::InProgress;
-        }
-
-        self.original_samples = 0;
-        self.changed_samples = self.changed_samples.saturating_add(1);
-        if self.changed_samples < A_STABLE_SAMPLES {
-            return TrackingResult::InProgress;
-        }
-
-        self.finished = true;
-        TrackingResult::Detent(direction_from_a_edge(a_high, self.b_high_at_edge))
     }
 }
 
-/// Direction truth table from the encoder specification.
-pub const fn direction_from_a_edge(
-    a_high_after_edge: bool,
-    b_high_at_edge: bool,
-) -> DetentDirection {
-    if a_high_after_edge != b_high_at_edge {
-        DetentDirection::Clockwise
-    } else {
-        DetentDirection::CounterClockwise
-    }
+pub const fn state_from_pins(a_high: bool, b_high: bool) -> u8 {
+    ((a_high as u8) << 1) | b_high as u8
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AEdgeTracker, DetentDirection, TrackingResult, direction_from_a_edge};
+    use super::{DetentDirection, HalfStepDecoder};
 
-    fn settle_changed(tracker: &mut AEdgeTracker, changed_a_high: bool) -> TrackingResult {
-        let mut result = TrackingResult::InProgress;
-        for _ in 0..30 {
-            result = tracker.sample(changed_a_high);
-        }
-        result
+    fn collect(decoder: &mut HalfStepDecoder, states: &[u8]) -> std::vec::Vec<DetentDirection> {
+        states
+            .iter()
+            .filter_map(|state| decoder.update(*state))
+            .collect()
     }
 
     #[test]
-    fn implements_the_published_a_edge_b_level_truth_table() {
+    fn one_electrical_cycle_emits_two_clockwise_detents() {
+        let mut decoder = HalfStepDecoder::new(0b00);
         assert_eq!(
-            direction_from_a_edge(true, false),
-            DetentDirection::Clockwise
-        );
-        assert_eq!(
-            direction_from_a_edge(false, true),
-            DetentDirection::Clockwise
-        );
-        assert_eq!(
-            direction_from_a_edge(true, true),
-            DetentDirection::CounterClockwise
-        );
-        assert_eq!(
-            direction_from_a_edge(false, false),
-            DetentDirection::CounterClockwise
+            collect(&mut decoder, &[0b10, 0b11, 0b01, 0b00]),
+            [DetentDirection::Clockwise, DetentDirection::Clockwise]
         );
     }
 
     #[test]
-    fn both_a_edges_in_each_pulse_are_clicks_in_the_same_direction() {
-        // CW waveform: 00 -> 10 -> 11 -> 01 -> 00.
+    fn one_electrical_cycle_emits_two_counter_clockwise_detents() {
+        let mut decoder = HalfStepDecoder::new(0b00);
         assert_eq!(
-            settle_changed(&mut AEdgeTracker::new(false, false), true),
-            TrackingResult::Detent(DetentDirection::Clockwise)
-        );
-        assert_eq!(
-            settle_changed(&mut AEdgeTracker::new(true, true), false),
-            TrackingResult::Detent(DetentDirection::Clockwise)
-        );
-
-        // CCW waveform: 00 -> 01 -> 11 -> 10 -> 00.
-        assert_eq!(
-            settle_changed(&mut AEdgeTracker::new(false, true), true),
-            TrackingResult::Detent(DetentDirection::CounterClockwise)
-        );
-        assert_eq!(
-            settle_changed(&mut AEdgeTracker::new(true, false), false),
-            TrackingResult::Detent(DetentDirection::CounterClockwise)
+            collect(&mut decoder, &[0b01, 0b11, 0b10, 0b00]),
+            [
+                DetentDirection::CounterClockwise,
+                DetentDirection::CounterClockwise
+            ]
         );
     }
 
     #[test]
-    fn contact_chatter_does_not_emit_an_extra_or_opposite_click() {
-        let mut tracker = AEdgeTracker::new(false, false);
-        for _ in 0..8 {
-            assert_eq!(tracker.sample(true), TrackingResult::InProgress);
-            assert_eq!(tracker.sample(false), TrackingResult::InProgress);
+    fn nine_pulses_emit_exactly_eighteen_identical_detents() {
+        for (cycle, expected) in [
+            ([0b10, 0b11, 0b01, 0b00], DetentDirection::Clockwise),
+            ([0b01, 0b11, 0b10, 0b00], DetentDirection::CounterClockwise),
+        ] {
+            let mut decoder = HalfStepDecoder::new(0b00);
+            let mut emitted = std::vec::Vec::new();
+            for _ in 0..9 {
+                emitted.extend(collect(&mut decoder, &cycle));
+            }
+            assert_eq!(emitted.len(), 18);
+            assert!(emitted.iter().all(|direction| *direction == expected));
         }
-        assert_eq!(
-            settle_changed(&mut tracker, true),
-            TrackingResult::Detent(DetentDirection::Clockwise)
-        );
-        assert_eq!(tracker.sample(false), TrackingResult::Cancelled);
     }
 
     #[test]
-    fn an_a_edge_that_settles_back_at_its_original_level_is_cancelled() {
-        let mut tracker = AEdgeTracker::new(false, false);
-        for _ in 0..5 {
-            assert_eq!(tracker.sample(true), TrackingResult::InProgress);
-        }
-        let mut result = TrackingResult::InProgress;
-        for _ in 0..30 {
-            result = tracker.sample(false);
-        }
-        assert_eq!(result, TrackingResult::Cancelled);
+    fn contact_chatter_walks_back_without_emitting() {
+        let mut decoder = HalfStepDecoder::new(0b00);
+        assert_eq!(
+            collect(&mut decoder, &[0b10, 0b00, 0b10, 0b00, 0b10, 0b11]),
+            [DetentDirection::Clockwise]
+        );
+    }
+
+    #[test]
+    fn reversal_before_a_completed_detent_emits_only_the_new_direction() {
+        let mut decoder = HalfStepDecoder::new(0b00);
+        assert_eq!(
+            collect(&mut decoder, &[0b10, 0b00, 0b01, 0b11]),
+            [DetentDirection::CounterClockwise]
+        );
+    }
+
+    #[test]
+    fn invalid_two_bit_jump_does_not_emit() {
+        let mut decoder = HalfStepDecoder::new(0b00);
+        assert!(collect(&mut decoder, &[0b11]).is_empty());
     }
 }
