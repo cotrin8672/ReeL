@@ -15,7 +15,8 @@ use embassy_nrf::gpiote::{InputChannel, InputChannelPolarity};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
-use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
+use embassy_nrf::timer::{Cc, Timer as HardwareTimer};
+use embassy_nrf::{bind_interrupts, ppi, rng, saadc, spim, usb};
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use nrf_mpsl::Flash;
@@ -26,7 +27,7 @@ use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::embassy_futures::select::{Either, select};
+use rmk::embassy_futures::select::select;
 use rmk::event::{KeyboardEvent, publish_event_async};
 use rmk::futures::future::join;
 use rmk::input_device::battery::{BatteryProcessor, ChargingStateReader};
@@ -40,7 +41,8 @@ use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
 use rotary_decoder::{
-    DetentDirection, DetentTracker, EncoderPhase, TrackingResult, is_detent_state, state_from_pins,
+    DetentDirection, DetentTracker, EncoderPhase, TrackingResult, first_captured_phase,
+    is_detent_state, state_from_pins,
 };
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
@@ -94,27 +96,77 @@ fn ble_addr() -> [u8; 6] {
 }
 
 const ENCODER_POLL_US: u64 = 100;
+const ENCODER_CAPTURE_EMPTY: u32 = u32::MAX;
+const ENCODER_CAPTURE_GROUP: usize = 0;
 
 /// Decoder for the encoder's documented 9-pulse/18-click waveform. It sleeps
 /// on GPIOTE at a detent, then samples only while a contact is moving.
 struct LeftRotaryEncoder {
     input_a: InputChannel<'static>,
     input_b: InputChannel<'static>,
+    capture_a: Cc<'static>,
+    capture_b: Cc<'static>,
     confirmed_state: u8,
 }
 
 impl LeftRotaryEncoder {
-    fn new(input_a: InputChannel<'static>, input_b: InputChannel<'static>) -> Self {
+    fn new(
+        input_a: InputChannel<'static>,
+        input_b: InputChannel<'static>,
+        capture_a: Cc<'static>,
+        capture_b: Cc<'static>,
+    ) -> Self {
         let confirmed_state = state_from_pins(input_a.pin().is_high(), input_b.pin().is_high());
         Self {
             input_a,
             input_b,
+            capture_a,
+            capture_b,
             confirmed_state,
         }
     }
 
     fn pin_state(&self) -> u8 {
         state_from_pins(self.input_a.pin().is_high(), self.input_b.pin().is_high())
+    }
+
+    fn arm_first_edge_capture(&self) {
+        let ppi = embassy_nrf::pac::PPI;
+        ppi.tasks_chg(ENCODER_CAPTURE_GROUP).dis().write_value(1);
+
+        self.capture_a.write(ENCODER_CAPTURE_EMPTY);
+        self.capture_b.write(ENCODER_CAPTURE_EMPTY);
+        embassy_nrf::pac::TIMER1.tasks_clear().write_value(1);
+
+        let gpiote = embassy_nrf::pac::GPIOTE;
+        gpiote.events_in(0).write_value(0);
+        gpiote.events_in(1).write_value(0);
+        ppi.tasks_chg(ENCODER_CAPTURE_GROUP).en().write_value(1);
+    }
+
+    fn captured_phase(&self) -> Option<EncoderPhase> {
+        let a = self.capture_a.read();
+        let b = self.capture_b.read();
+        first_captured_phase(
+            (a != ENCODER_CAPTURE_EMPTY).then_some(a),
+            (b != ENCODER_CAPTURE_EMPTY).then_some(b),
+        )
+    }
+
+    async fn wait_for_first_edge(&mut self) -> EncoderPhase {
+        loop {
+            // The GPIOTE futures only wake the task. PPI has already latched
+            // the physical first edge and disabled both capture channels, so
+            // software poll order cannot change the direction.
+            let _ = select(
+                select(self.input_a.wait(), self.input_b.wait()),
+                Timer::after_millis(2),
+            )
+            .await;
+            if let Some(phase) = self.captured_phase() {
+                return phase;
+            }
+        }
     }
 }
 
@@ -142,10 +194,8 @@ impl Runnable for LeftRotaryEncoder {
                 self.confirmed_state = self.pin_state();
             }
 
-            let wake_phase = match select(self.input_a.wait(), self.input_b.wait()).await {
-                Either::First(()) => EncoderPhase::A,
-                Either::Second(()) => EncoderPhase::B,
-            };
+            self.arm_first_edge_capture();
+            let wake_phase = self.wait_for_first_edge().await;
             let mut tracker = DetentTracker::new(self.confirmed_state, wake_phase);
 
             loop {
@@ -255,7 +305,33 @@ async fn main(spawner: Spawner) {
         Pull::Up,
         InputChannelPolarity::Toggle,
     );
-    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
+    let encoder_timer = HardwareTimer::new(p.TIMER1);
+    let encoder_a_capture = encoder_timer.cc(0);
+    let encoder_b_capture = encoder_timer.cc(1);
+    let mut encoder_capture_group = ppi::PpiGroup::new(p.PPI_GROUP0);
+    let encoder_a_ppi = ppi::Ppi::new_one_to_two(
+        p.PPI_CH0,
+        encoder_a.event_in(),
+        encoder_a_capture.task_capture(),
+        encoder_capture_group.task_disable_all(),
+    );
+    let encoder_b_ppi = ppi::Ppi::new_one_to_two(
+        p.PPI_CH1,
+        encoder_b.event_in(),
+        encoder_b_capture.task_capture(),
+        encoder_capture_group.task_disable_all(),
+    );
+    encoder_capture_group.add_channel(&encoder_a_ppi);
+    encoder_capture_group.add_channel(&encoder_b_ppi);
+    encoder_capture_group.disable_all();
+    encoder_timer.start();
+    encoder_timer.persist();
+    encoder_a_ppi.persist();
+    encoder_b_ppi.persist();
+    encoder_capture_group.persist();
+
+    let mut encoder =
+        LeftRotaryEncoder::new(encoder_a, encoder_b, encoder_a_capture, encoder_b_capture);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 

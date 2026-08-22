@@ -119,9 +119,23 @@ pub const fn is_detent_state(state: u8) -> bool {
     matches!(state, 0b00 | 0b11)
 }
 
+pub const fn first_captured_phase(
+    a_timestamp: Option<u32>,
+    b_timestamp: Option<u32>,
+) -> Option<EncoderPhase> {
+    match (a_timestamp, b_timestamp) {
+        (Some(a), Some(b)) if b < a => Some(EncoderPhase::B),
+        (Some(_), _) => Some(EncoderPhase::A),
+        (None, Some(_)) => Some(EncoderPhase::B),
+        (None, None) => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DetentDirection, DetentTracker, EncoderPhase, TrackingResult};
+    use super::{
+        DetentDirection, DetentTracker, EncoderPhase, TrackingResult, first_captured_phase,
+    };
 
     const HIGH_DETENT: u8 = 0b11;
     const LOW_DETENT: u8 = 0b00;
@@ -304,5 +318,20 @@ mod tests {
         let mut tracker = DetentTracker::new(HIGH_DETENT, EncoderPhase::A);
         sample_state(&mut tracker, 0b01);
         assert_eq!(settle(&mut tracker, HIGH_DETENT), TrackingResult::Cancelled);
+    }
+
+    #[test]
+    fn hardware_capture_order_wins_over_software_poll_order() {
+        assert_eq!(first_captured_phase(Some(10), None), Some(EncoderPhase::A));
+        assert_eq!(first_captured_phase(None, Some(10)), Some(EncoderPhase::B));
+        assert_eq!(
+            first_captured_phase(Some(20), Some(10)),
+            Some(EncoderPhase::B)
+        );
+        assert_eq!(
+            first_captured_phase(Some(10), Some(20)),
+            Some(EncoderPhase::A)
+        );
+        assert_eq!(first_captured_phase(None, None), None);
     }
 }
