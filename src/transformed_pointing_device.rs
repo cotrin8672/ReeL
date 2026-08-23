@@ -2,14 +2,15 @@ use core::future::pending;
 
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal_async::digital::Wait;
-use rmk::event::{Axis, AxisEvent, AxisValType, PointingEvent};
+use rmk::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent};
 use rmk::input_device::pointing::{InitState, PointingDriver};
-use rmk::macros::input_device;
+use rmk::macros::{input_device, processor};
 
 use crate::calibration_config::current_matrix;
 use crate::motion_gain::MotionGain;
 use crate::trackball_transform::TrackballTransform;
 
+#[processor(subscribe = [PointingSetCpiEvent])]
 #[input_device(publish = PointingEvent)]
 pub struct TransformingPointingDevice<S: PointingDriver> {
     sensor: S,
@@ -23,6 +24,7 @@ pub struct TransformingPointingDevice<S: PointingDriver> {
     accumulated_y: i32,
     pending_report_x: i32,
     pending_report_y: i32,
+    requested_cpi: Option<u16>,
     transform: TrackballTransform,
     gain: MotionGain,
 }
@@ -47,6 +49,7 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             accumulated_y: 0,
             pending_report_x: 0,
             pending_report_y: 0,
+            requested_cpi: None,
             transform: TrackballTransform::new(),
             gain: MotionGain::new(),
         }
@@ -66,6 +69,9 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             match self.sensor.init().await {
                 Ok(()) => {
                     self.init_state = InitState::Ready;
+                    if let Some(cpi) = self.requested_cpi {
+                        let _ = self.sensor.set_resolution(cpi).await;
+                    }
                     return true;
                 }
                 Err(_) => {
@@ -94,6 +100,15 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         if let Ok(motion) = self.sensor.read_motion().await {
             self.accumulated_x = self.accumulated_x.saturating_add(i32::from(motion.dx));
             self.accumulated_y = self.accumulated_y.saturating_add(i32::from(motion.dy));
+        }
+    }
+
+    async fn on_pointing_set_cpi_event(&mut self, event: PointingSetCpiEvent) {
+        if event.device_id == self.id {
+            self.requested_cpi = Some(event.cpi);
+            if self.init_state == InitState::Ready {
+                let _ = self.sensor.set_resolution(event.cpi).await;
+            }
         }
     }
 
@@ -154,6 +169,10 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
             || self.pending_report_y != 0
     }
 
+    fn has_pending_report(&self) -> bool {
+        self.pending_report_x != 0 || self.pending_report_y != 0
+    }
+
     async fn read_pointing_event(&mut self) -> PointingEvent {
         use rmk::embassy_futures::select::{Either, select};
 
@@ -165,6 +184,16 @@ impl<S: PointingDriver> TransformingPointingDevice<S> {
         }
 
         loop {
+            // A single report-period sample can exceed the i8 axes used by
+            // RMK's MouseReport. Once that sample's first chunk is due, drain
+            // its remaining chunks immediately instead of replaying stale
+            // motion over subsequent report periods.
+            if self.has_pending_report()
+                && let Some(event) = self.take_report_event()
+            {
+                return event;
+            }
+
             // Check the deadline before waiting for another sensor edge. This
             // is also the tie-breaker when MOTION remains asserted and both
             // futures are ready.
@@ -225,8 +254,61 @@ fn take_i16_chunk(value: &mut i32) -> i16 {
     chunk as i16
 }
 
-fn take_i8_chunk(value: &mut i32) -> i8 {
-    let chunk = (*value).clamp(i32::from(i8::MIN), i32::from(i8::MAX));
+const fn take_i8_chunk(value: &mut i32) -> i8 {
+    let chunk = if *value < i8::MIN as i32 {
+        i8::MIN as i32
+    } else if *value > i8::MAX as i32 {
+        i8::MAX as i32
+    } else {
+        *value
+    };
     *value -= chunk;
     chunk as i8
+}
+
+const _: () = {
+    let mut positive = 500;
+    assert!(take_i8_chunk(&mut positive) == 127);
+    assert!(take_i8_chunk(&mut positive) == 127);
+    assert!(take_i8_chunk(&mut positive) == 127);
+    assert!(take_i8_chunk(&mut positive) == 119);
+    assert!(positive == 0);
+
+    let mut negative = -500;
+    assert!(take_i8_chunk(&mut negative) == -128);
+    assert!(take_i8_chunk(&mut negative) == -128);
+    assert!(take_i8_chunk(&mut negative) == -128);
+    assert!(take_i8_chunk(&mut negative) == -116);
+    assert!(negative == 0);
+};
+
+#[cfg(test)]
+mod tests {
+    use super::take_i8_chunk;
+
+    #[test]
+    fn fast_motion_is_split_without_losing_distance() {
+        let mut remaining = 500;
+        let mut chunks = [0_i8; 4];
+
+        for chunk in &mut chunks {
+            *chunk = take_i8_chunk(&mut remaining);
+        }
+
+        assert_eq!(chunks, [127, 127, 127, 119]);
+        assert_eq!(remaining, 0);
+        assert_eq!(chunks.into_iter().map(i32::from).sum::<i32>(), 500);
+    }
+
+    #[test]
+    fn negative_motion_is_split_without_losing_distance() {
+        let mut remaining = -500;
+        let mut total = 0_i32;
+
+        while remaining != 0 {
+            total += i32::from(take_i8_chunk(&mut remaining));
+        }
+
+        assert_eq!(total, -500);
+    }
 }

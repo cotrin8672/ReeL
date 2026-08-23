@@ -11,7 +11,7 @@ memory LCDs are intentionally outside the current RMK port.
   the previous firmware
 - BLE split with the right half at columns 6..10 and the left half at columns
   0..5
-- PMW3610 at 1200 CPI and 125 Hz on the right half
+- PMW3610 at 250 Hz on the right half, with 1600 CPI as the per-profile default
 - Calibrated fixed-point direction transform with input-length normalization and
   retained per-axis remainder:
 
