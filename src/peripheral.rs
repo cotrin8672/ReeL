@@ -40,7 +40,7 @@ use static_cell::StaticCell;
 
 use core::sync::atomic::Ordering;
 
-use rotary_decoder::{Detent, QuadratureAccumulator};
+use rotary_decoder::{ClockedDetentDecoder, Detent};
 use sharp_lcd::{ENCODER_DIAG, new_status_lcd};
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -94,21 +94,17 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// The encoder (9 pulse / 18 click) switches phase B exactly at the detent
-/// rest positions, so B chatters at rest and no single instantaneous read of
-/// it is trustworthy. `rotary_decoder::QuadratureAccumulator` handles that by
-/// integrating every raw quadrature transition; this task only supplies raw
-/// samples:
+/// On this encoder (BM4.0A01 style, 9 pulse / 18 click) phase B switches at
+/// the detent rest positions and its edge is always consumed by the detent
+/// snap, so only phase A produces a readable edge per click (verified with
+/// the on-device diagnostics). `rotary_decoder::ClockedDetentDecoder`
+/// therefore uses A as the click clock and B's debounced level as the
+/// direction bit; this task only supplies raw samples:
 ///
 /// - Idle: sleep until either phase produces an edge.
-/// - Active: sample both phases every ~61 us, feed them to the accumulator
+/// - Active: sample both phases every ~61 us, feed them to the decoder
 ///   unfiltered, and forward emitted detents. After ~50 ms without any level
 ///   change, return to edge wakeup.
-///
-/// The fast sampling matters: during the detent snap the knob accelerates,
-/// so the two phase edges of a click can land only a few hundred
-/// microseconds apart. Sampled too slowly they collapse into one ambiguous
-/// double transition and the click is lost.
 ///
 /// Every raw sample is also classified (A changed / B changed / both) into
 /// `sharp_lcd::ENCODER_DIAG`, which the left LCD renders for on-device
@@ -116,12 +112,12 @@ fn ble_addr() -> [u8; 6] {
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    decoder: QuadratureAccumulator,
+    decoder: ClockedDetentDecoder,
 }
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
-        let decoder = QuadratureAccumulator::new(pin_a.is_high(), pin_b.is_high());
+        let decoder = ClockedDetentDecoder::new(pin_a.is_high(), pin_b.is_high());
         Self {
             pin_a,
             pin_b,
@@ -154,6 +150,10 @@ impl Runnable for LeftRotaryEncoder {
         // ~50 ms without any raw level change before returning to edge wakeup.
         const QUIET_SAMPLES_TO_IDLE: u32 = 820;
 
+        // Net emitted detents (CW - CCW), shown in the diagnostics area.
+        let mut net_detents: i32 = 0;
+        let mut last_levels = (self.pin_a.is_high(), self.pin_b.is_high());
+
         loop {
             // Idle: no polling while the knob rests quietly.
             select(
@@ -162,50 +162,49 @@ impl Runnable for LeftRotaryEncoder {
             )
             .await;
 
-            let mut last_levels = (self.pin_a.is_high(), self.pin_b.is_high());
             let mut quiet_samples = 0;
             loop {
-                if let Some(detent) = self.decoder.update(last_levels.0, last_levels.1) {
-                    let direction = match detent {
-                        Detent::Clockwise => {
-                            ENCODER_DIAG.clockwise.fetch_add(1, Ordering::Relaxed);
-                            Direction::Clockwise
-                        }
-                        Detent::CounterClockwise => {
-                            ENCODER_DIAG.counterclockwise.fetch_add(1, Ordering::Relaxed);
-                            Direction::CounterClockwise
-                        }
-                    };
-                    ENCODER_DIRECTION_CHANNEL.send(direction).await;
-                }
-                ENCODER_DIAG
-                    .position
-                    .store(self.decoder.position(), Ordering::Relaxed);
-
-                if quiet_samples >= QUIET_SAMPLES_TO_IDLE {
-                    break;
-                }
-                Timer::after_ticks(SAMPLE_PERIOD_TICKS).await;
                 let levels = (self.pin_a.is_high(), self.pin_b.is_high());
                 match (levels.0 != last_levels.0, levels.1 != last_levels.1) {
-                    (false, false) => {
-                        quiet_samples += 1;
-                        continue;
-                    }
+                    (false, false) => quiet_samples += 1,
                     (true, false) => {
+                        quiet_samples = 0;
                         ENCODER_DIAG.a_transitions.fetch_add(1, Ordering::Relaxed);
                     }
                     (false, true) => {
+                        quiet_samples = 0;
                         ENCODER_DIAG.b_transitions.fetch_add(1, Ordering::Relaxed);
                     }
                     (true, true) => {
+                        quiet_samples = 0;
                         ENCODER_DIAG
                             .double_transitions
                             .fetch_add(1, Ordering::Relaxed);
                     }
                 }
-                quiet_samples = 0;
                 last_levels = levels;
+
+                if let Some(detent) = self.decoder.update(levels.0, levels.1) {
+                    let direction = match detent {
+                        Detent::Clockwise => {
+                            net_detents += 1;
+                            ENCODER_DIAG.clockwise.fetch_add(1, Ordering::Relaxed);
+                            Direction::Clockwise
+                        }
+                        Detent::CounterClockwise => {
+                            net_detents -= 1;
+                            ENCODER_DIAG.counterclockwise.fetch_add(1, Ordering::Relaxed);
+                            Direction::CounterClockwise
+                        }
+                    };
+                    ENCODER_DIAG.position.store(net_detents, Ordering::Relaxed);
+                    ENCODER_DIRECTION_CHANNEL.send(direction).await;
+                }
+
+                if quiet_samples >= QUIET_SAMPLES_TO_IDLE {
+                    break;
+                }
+                Timer::after_ticks(SAMPLE_PERIOD_TICKS).await;
             }
         }
     }

@@ -1,51 +1,47 @@
-//! Quadrature decoder for the left-half rotary encoder (9 pulse / 18 click).
+//! Decoder for the left-half rotary encoder (BM4.0A01 style, 9 pulse /
+//! 18 click).
 //!
-//! ## What the datasheet waveform actually shows
+//! ## What the part actually outputs (measured on the device)
 //!
-//! In the "ENCODER OUTPUT SIGNAL" diagram (CW rotation, detents marked with
-//! vertical dash-dot lines), the two phases are *not* symmetric:
+//! On-device diagnostics (raw transition counters on the left LCD, sampled
+//! every ~61 us) showed, for 4 slow clicks in one direction:
 //!
-//! - Phase A toggles once per click, roughly midway **between** detents.
-//! - Phase B toggles once per click, essentially **at** the detent rest
-//!   positions.
+//! - 4 clean single transitions of phase A, one per click, all with the
+//!   correct direction sign — A toggles midway between detents where the
+//!   knob moves slowly, exactly as the datasheet draws it.
+//! - 0 clean single transitions of phase B. B toggles *at* the detent rest
+//!   positions, and the detent spring snaps the shaft through that zone in
+//!   well under a sample period, together with contact bounce on both
+//!   phases. B's edge is therefore never observable as a valid Gray-code
+//!   step: it always arrives as an ambiguous both-bits-changed double.
 //!
-//! So while the knob rests in a detent, phase B sits right on its own
-//! switching threshold. It can chatter there indefinitely, and whether it has
-//! "already" switched at a given rest is effectively undefined. Phase A, in
-//! contrast, rests far away from its threshold and is clean.
-//!
-//! This explains every failure recorded in this repository's history:
-//!
-//! - Sampling B at A's edge: in the direction where B moves first, A's edge
-//!   arrives while B is still bouncing, so the read alternates -> the
-//!   "one direction fine, other direction alternates up/down" symptom.
-//! - Hardware QDEC with its debounce filter: B never presents a stable level
-//!   around the rests, so its transition is accepted late (or merged with A's
-//!   into an invalid double transition) and the accumulator reports 0 or ±1
-//!   per click -> the "responds once per two clicks" symptom.
-//! - Any state machine that discards partial progress on an unexpected
-//!   transition: rest chatter constantly resets it -> lost clicks.
+//! So a full quadrature accumulator can only ever integrate ±1 per click
+//! (A's step); the ±2-per-click threshold then fires on every second click.
+//! Treating this part as a generic quadrature encoder is what every failed
+//! attempt in this repository's history has in common.
 //!
 //! ## How this decoder works
 //!
-//! Both phases are sampled at a fixed fast rate and every *valid* Gray-code
-//! transition of the raw pair adds ±1 to a signed position counter. Nothing
-//! is ever gated on stability and no partial progress is discarded:
+//! The part is decoded the way its geometry intends:
 //!
-//! - Contact bounce and rest chatter produce +1/-1 pairs that cancel exactly.
-//! - A real click always nets exactly ±2 (one A toggle plus one B toggle).
+//! - **Phase A is the clock.** One debounced A level change = one click.
+//!   A rests far from its own threshold, so it is quiet at rest; its edge
+//!   sits mid-travel, clear of the snap. Bounce is removed by requiring the
+//!   new level to persist for [`DEBOUNCE_SAMPLES`] consecutive samples.
+//! - **Phase B is the direction bit.** At A's edge the direction is
+//!   `stable_a XOR stable_b`, using B's last *debounced* level — i.e. the
+//!   level B held during travel, from *before* the edge. (The historical
+//!   bug was sampling B shortly *after* A's edge, which can land inside the
+//!   snap where B is bouncing; that produced the "one direction fine, the
+//!   other alternates up/down" symptom.)
+//! - B never emits anything. Its rest chatter and its unreadable snap edge
+//!   only ever update the direction reference once a level has been held
+//!   long enough to be trustworthy.
 //!
-//! A detent is emitted whenever the position moves 2 counts away from the
-//! position of the last emitted detent (the anchor). Rest chatter only ever
-//! moves the position ±1 around the anchor, so it can never emit; a real
-//! click always reaches ±2, so it always emits, in both directions, at any
-//! speed the sampling can follow.
-//!
-//! If both phases change within one sample (only possible when a bounce edge
-//! coincides with the other phase's edge in the same sample window), the
-//! transition direction is unknowable. It contributes 0 and the tracked state
-//! resyncs; at worst one click is swallowed once, after which the anchor is
-//! aligned again. This cannot corrupt the direction.
+//! Between two adjacent detents B is constant (its edges are at the
+//! detents), so by the time A's mid-travel edge arrives, B has been settled
+//! for about half a click of travel in either rotation direction — orders
+//! of magnitude longer than the debounce window, even when spinning fast.
 
 /// One physical detent click.
 ///
@@ -59,205 +55,246 @@ pub enum Detent {
     CounterClockwise,
 }
 
-/// Signed quarter-steps per detent: one A toggle plus one B toggle.
-const COUNTS_PER_DETENT: i32 = 2;
+/// Consecutive identical samples required before a level counts as settled.
+/// At the ~61 us sample period this is ~1 ms — longer than contact bounce,
+/// far shorter than the shortest plateau between edges when spinning fast.
+pub const DEBOUNCE_SAMPLES: u8 = 16;
 
-/// `TRANSITION_DELTA[(previous << 2) | current]` where a state is
-/// `(a as u8) << 1 | (b as u8)`.
-///
-/// +1 for each Gray step along 11 -> 01 -> 00 -> 10 -> 11 (datasheet CW),
-/// -1 for the reverse, 0 for no change and for invalid double transitions.
-const TRANSITION_DELTA: [i8; 16] = [
-    0, -1, 1, 0, // from 00
-    1, 0, 0, -1, // from 01
-    -1, 0, 0, 1, // from 10
-    0, 1, -1, 0, // from 11
-];
-
-pub struct QuadratureAccumulator {
-    previous_state: u8,
-    position: i32,
-    anchor: i32,
+pub struct ClockedDetentDecoder {
+    stable_a: bool,
+    stable_b: bool,
+    candidate_a: bool,
+    candidate_b: bool,
+    run_a: u8,
+    run_b: u8,
 }
 
-const fn encode(a_high: bool, b_high: bool) -> u8 {
-    ((a_high as u8) << 1) | (b_high as u8)
-}
-
-impl QuadratureAccumulator {
+impl ClockedDetentDecoder {
     pub const fn new(a_high: bool, b_high: bool) -> Self {
         Self {
-            previous_state: encode(a_high, b_high),
-            position: 0,
-            anchor: 0,
+            stable_a: a_high,
+            stable_b: b_high,
+            candidate_a: a_high,
+            candidate_b: b_high,
+            run_a: DEBOUNCE_SAMPLES,
+            run_b: DEBOUNCE_SAMPLES,
         }
     }
 
-    /// Net signed quarter-steps integrated since construction.
-    pub fn position(&self) -> i32 {
-        self.position
-    }
-
-    /// Feed one raw sample of both phases. Returns a detent when the knob
-    /// has completed one full click since the last emitted detent.
-    ///
-    /// A single sample changes the position by at most 1, so at most one
-    /// detent can be emitted per sample.
+    /// Feed one raw sample of both phases. Returns a detent when phase A
+    /// completes a debounced level change.
     pub fn update(&mut self, a_high: bool, b_high: bool) -> Option<Detent> {
-        let state = encode(a_high, b_high);
-        let delta = TRANSITION_DELTA[usize::from((self.previous_state << 2) | state)];
-        self.previous_state = state;
-        self.position += i32::from(delta);
-
-        if self.position - self.anchor >= COUNTS_PER_DETENT {
-            self.anchor += COUNTS_PER_DETENT;
-            Some(Detent::Clockwise)
-        } else if self.position - self.anchor <= -COUNTS_PER_DETENT {
-            self.anchor -= COUNTS_PER_DETENT;
-            Some(Detent::CounterClockwise)
+        if a_high == self.candidate_a {
+            self.run_a = self.run_a.saturating_add(1);
         } else {
-            None
+            self.candidate_a = a_high;
+            self.run_a = 1;
         }
+        if b_high == self.candidate_b {
+            self.run_b = self.run_b.saturating_add(1);
+        } else {
+            self.candidate_b = b_high;
+            self.run_b = 1;
+        }
+
+        let mut detent = None;
+        if self.run_a >= DEBOUNCE_SAMPLES && self.candidate_a != self.stable_a {
+            self.stable_a = self.candidate_a;
+            // Direction from B's level held during travel, before this edge.
+            detent = Some(if self.stable_a != self.stable_b {
+                Detent::Clockwise
+            } else {
+                Detent::CounterClockwise
+            });
+        }
+        // Promote B only after the direction was taken, so that in the
+        // (theoretical) case of both phases settling in the same sample the
+        // pre-edge B level is still the one that decides.
+        if self.run_b >= DEBOUNCE_SAMPLES && self.candidate_b != self.stable_b {
+            self.stable_b = self.candidate_b;
+        }
+        detent
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Detent, QuadratureAccumulator};
+    use super::{ClockedDetentDecoder, DEBOUNCE_SAMPLES, Detent};
+
+    const STABLE: usize = DEBOUNCE_SAMPLES as usize;
+
+    struct Harness {
+        decoder: ClockedDetentDecoder,
+        clockwise: u32,
+        counterclockwise: u32,
+    }
+
+    impl Harness {
+        fn new(a: bool, b: bool) -> Self {
+            Self {
+                decoder: ClockedDetentDecoder::new(a, b),
+                clockwise: 0,
+                counterclockwise: 0,
+            }
+        }
+
+        /// Feed the same raw sample `count` times.
+        fn hold(&mut self, (a, b): (bool, bool), count: usize) {
+            for _ in 0..count {
+                match self.decoder.update(a, b) {
+                    Some(Detent::Clockwise) => self.clockwise += 1,
+                    Some(Detent::CounterClockwise) => self.counterclockwise += 1,
+                    None => {}
+                }
+            }
+        }
+
+        /// Alternate between two raw samples, `period` samples each,
+        /// `flips` times — bounce or chatter, always shorter than the
+        /// debounce window per level.
+        fn flap(&mut self, first: (bool, bool), second: (bool, bool), period: usize, flips: usize) {
+            assert!(period < STABLE);
+            for flip in 0..flips {
+                let state = if flip % 2 == 0 { first } else { second };
+                self.hold(state, period);
+            }
+        }
+
+        fn assert_events(&mut self, clockwise: u32, counterclockwise: u32) {
+            assert_eq!(
+                (self.clockwise, self.counterclockwise),
+                (clockwise, counterclockwise)
+            );
+            self.clockwise = 0;
+            self.counterclockwise = 0;
+        }
+    }
 
     const S11: (bool, bool) = (true, true);
     const S01: (bool, bool) = (false, true);
     const S00: (bool, bool) = (false, false);
     const S10: (bool, bool) = (true, false);
 
-    fn feed(
-        decoder: &mut QuadratureAccumulator,
-        states: &[(bool, bool)],
-    ) -> (u32, u32) {
-        let mut clockwise = 0;
-        let mut counterclockwise = 0;
-        for &(a, b) in states {
-            match decoder.update(a, b) {
-                Some(Detent::Clockwise) => clockwise += 1,
-                Some(Detent::CounterClockwise) => counterclockwise += 1,
-                None => {}
-            }
-        }
-        (clockwise, counterclockwise)
+    /// One measured-style CW click starting from a settled (1,1) rest:
+    /// bouncy A edge mid-travel, then the snap where both phases jitter
+    /// together and B comes out flipped.
+    fn cw_click_from_11(harness: &mut Harness) {
+        harness.flap(S01, S11, 3, 5); // A edge with bounce
+        harness.hold(S01, 200); // mid-travel plateau
+        harness.flap(S00, S11, 2, 6); // snap: ambiguous doubles
+        harness.hold(S00, 200); // settled at the next rest
+    }
+
+    fn cw_click_from_00(harness: &mut Harness) {
+        harness.flap(S10, S00, 3, 5);
+        harness.hold(S10, 200);
+        harness.flap(S11, S00, 2, 6);
+        harness.hold(S11, 200);
+    }
+
+    /// One CCW click starting from a settled (0,0) rest: B crawls across
+    /// its threshold at departure (long flaps), then A edges mid-travel.
+    fn ccw_click_from_00(harness: &mut Harness) {
+        harness.hold(S01, STABLE + 5); // B settles high at departure
+        harness.hold(S00, 3); // one late B bounce, too short to matter
+        harness.hold(S01, 200);
+        harness.flap(S11, S01, 3, 5); // A edge with bounce
+        harness.hold(S11, 200); // settled at the next rest
+    }
+
+    fn ccw_click_from_11(harness: &mut Harness) {
+        harness.hold(S10, STABLE + 5);
+        harness.hold(S11, 3);
+        harness.hold(S10, 200);
+        harness.flap(S00, S10, 3, 5);
+        harness.hold(S00, 200);
     }
 
     #[test]
-    fn clockwise_click_with_bounce_on_both_phases_emits_exactly_once() {
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        // A bounces while leaving the rest, then B bounces on arrival at the
-        // next detent. Every flip-flop pair cancels; the click nets +2.
-        let states = [
-            S11, S01, S11, S01, S11, S01, // A edge with bounce
-            S01, S01, S01, // stable mid-travel
-            S00, S01, S00, S01, S00, // B edge with bounce at arrival
-            S00, S00,
-        ];
-        assert_eq!(feed(&mut decoder, &states), (1, 0));
+    fn cw_clicks_emit_exactly_once_per_click() {
+        let mut harness = Harness::new(true, true);
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
+        cw_click_from_00(&mut harness);
+        harness.assert_events(1, 0);
     }
 
     #[test]
-    fn counterclockwise_click_with_bounce_emits_exactly_once() {
-        let mut decoder = QuadratureAccumulator::new(false, false);
-        // CCW from a 00 rest: B moves first (at departure), then A.
-        let states = [
-            S00, S01, S00, S01, S00, S01, // B edge with bounce at departure
-            S01, S01, S01, // stable mid-travel
-            S11, S01, S11, S01, S11, // A edge with bounce
-            S11, S11,
-        ];
-        assert_eq!(feed(&mut decoder, &states), (0, 1));
-    }
-
-    #[test]
-    fn rest_chatter_around_the_detent_never_emits() {
-        // Phase B switches exactly at the detents, so it may chatter
-        // indefinitely while the knob rests. That is a +1/-1 oscillation
-        // around the anchor and must never reach the +-2 threshold.
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        let mut states = [S11; 100];
-        for (index, state) in states.iter_mut().enumerate() {
-            if index % 2 == 0 {
-                *state = S10;
-            }
-        }
-        assert_eq!(feed(&mut decoder, &states), (0, 0));
-
-        let mut decoder = QuadratureAccumulator::new(false, false);
-        let mut states = [S00; 100];
-        for (index, state) in states.iter_mut().enumerate() {
-            if index % 2 == 0 {
-                *state = S01;
-            }
-        }
-        assert_eq!(feed(&mut decoder, &states), (0, 0));
-    }
-
-    #[test]
-    fn chatter_at_the_new_rest_after_a_click_does_not_double_emit() {
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        let click = [S01, S00];
-        assert_eq!(feed(&mut decoder, &click), (1, 0));
-        // Arrived at the 00 rest; B chatters on its threshold (00 <-> 01).
-        let chatter = [S01, S00, S01, S00, S01, S00, S01, S00];
-        assert_eq!(feed(&mut decoder, &chatter), (0, 0));
+    fn ccw_clicks_emit_exactly_once_per_click() {
+        let mut harness = Harness::new(false, false);
+        ccw_click_from_00(&mut harness);
+        harness.assert_events(0, 1);
+        ccw_click_from_11(&mut harness);
+        harness.assert_events(0, 1);
     }
 
     #[test]
     fn eighteen_clicks_per_revolution_in_each_direction() {
-        let cw_cycle = [S01, S00, S10, S11];
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        let mut clockwise = 0;
+        let mut harness = Harness::new(true, true);
         for _ in 0..9 {
-            for state in cw_cycle {
-                // Repeat each sample: duplicates must not matter.
-                let (cw, ccw) = feed(&mut decoder, &[state, state, state]);
-                clockwise += cw;
-                assert_eq!(ccw, 0);
-            }
+            cw_click_from_11(&mut harness);
+            cw_click_from_00(&mut harness);
         }
-        assert_eq!(clockwise, 18);
-
-        let ccw_cycle = [S10, S00, S01, S11];
-        let mut counterclockwise = 0;
+        harness.assert_events(18, 0);
         for _ in 0..9 {
-            for state in ccw_cycle {
-                let (cw, ccw) = feed(&mut decoder, &[state, state, state]);
-                counterclockwise += ccw;
-                assert_eq!(cw, 0);
-            }
+            ccw_click_from_11(&mut harness);
+            ccw_click_from_00(&mut harness);
         }
-        assert_eq!(counterclockwise, 18);
+        harness.assert_events(0, 18);
     }
 
     #[test]
-    fn direction_reversal_loses_no_motion() {
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        assert_eq!(feed(&mut decoder, &[S01, S00]), (1, 0));
-        assert_eq!(feed(&mut decoder, &[S01, S11]), (0, 1));
-        assert_eq!(feed(&mut decoder, &[S01, S00]), (1, 0));
+    fn direction_reversal_is_immediate_and_correct() {
+        let mut harness = Harness::new(true, true);
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
+        ccw_click_from_00(&mut harness);
+        harness.assert_events(0, 1);
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
     }
 
     #[test]
-    fn a_missed_intermediate_state_swallows_at_most_one_click() {
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        // Both phases appear to change in one sample: direction unknowable,
-        // so nothing may be emitted for that click.
-        assert_eq!(feed(&mut decoder, &[S00]), (0, 0));
-        // The decoder resynchronized at 00; following clicks emit normally.
-        assert_eq!(feed(&mut decoder, &[S10, S11]), (1, 0));
-        assert_eq!(feed(&mut decoder, &[S01, S00]), (1, 0));
+    fn rest_chatter_on_b_never_emits() {
+        // B sits on its own switching threshold at every detent and may
+        // chatter there indefinitely — fast or slow.
+        let mut harness = Harness::new(false, false);
+        harness.flap(S01, S00, 2, 100); // fast chatter
+        for _ in 0..10 {
+            harness.hold(S01, STABLE + 10); // slow chatter: each level settles
+            harness.hold(S00, STABLE + 10);
+        }
+        harness.assert_events(0, 0);
     }
 
     #[test]
-    fn slow_sampling_that_skips_bounce_still_counts_the_click() {
-        // Levels sampled after every bounce settled: the pure sequence.
-        let mut decoder = QuadratureAccumulator::new(true, true);
-        assert_eq!(feed(&mut decoder, &[S01]), (0, 0));
-        assert_eq!(feed(&mut decoder, &[S00]), (1, 0));
+    fn short_glitches_on_a_are_ignored() {
+        let mut harness = Harness::new(true, true);
+        harness.flap(S01, S11, 4, 20);
+        harness.hold(S11, 200);
+        harness.assert_events(0, 0);
+    }
+
+    #[test]
+    fn snap_doubles_alone_never_emit() {
+        // Both phases jittering together (the arrival snap) with A settling
+        // back where it was: no click may be reported.
+        let mut harness = Harness::new(false, true);
+        harness.flap(S00, S11, 2, 8);
+        harness.hold(S00, 200);
+        harness.assert_events(0, 0);
+    }
+
+    #[test]
+    fn fast_rotation_still_counts_every_click() {
+        // ~2 ms per half-click plateau: just over the debounce window.
+        let mut harness = Harness::new(true, true);
+        for _ in 0..9 {
+            harness.hold(S01, STABLE * 2);
+            harness.hold(S00, STABLE * 2);
+            harness.hold(S10, STABLE * 2);
+            harness.hold(S11, STABLE * 2);
+        }
+        harness.assert_events(18, 0);
     }
 }
