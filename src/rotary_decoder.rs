@@ -17,8 +17,12 @@
 //! - A debounces to exactly one event per click.
 //! - Every raw one-bit Gray transition contributes +1 or -1 to signed
 //!   movement. Bounce contributes opposite pairs and cancels.
-//! - When A confirms a click, the sign accumulated since the previous
-//!   confirmed A click gives its direction.
+//! - When A confirms a click, the sign accumulated from A's first raw
+//!   departure through its debounced new level gives its direction. That
+//!   window belongs only to the current click, so post-click B chatter from
+//!   the previous direction cannot bias a reversal.
+//! - If A and B changed together and that local window has no signed
+//!   evidence, movement across the whole click interval is the fallback.
 //! - Once the contacts have been unchanged for [`EVIDENCE_IDLE_SAMPLES`],
 //!   movement left over from the previous click settling is discarded. It
 //!   must not bias the first click after a direction reversal.
@@ -70,6 +74,8 @@ pub struct ClockedDetentDecoder {
     run_a: u8,
     previous_state: u8,
     unchanged_samples: u8,
+    tracking_a_edge: bool,
+    edge_movement: i32,
     interval_movement: i32,
     position: i32,
     last_direction: Option<Detent>,
@@ -83,6 +89,8 @@ impl ClockedDetentDecoder {
             run_a: DEBOUNCE_SAMPLES,
             previous_state: encode(a_high, b_high),
             unchanged_samples: EVIDENCE_IDLE_SAMPLES,
+            tracking_a_edge: false,
+            edge_movement: 0,
             interval_movement: 0,
             position: 0,
             last_direction: None,
@@ -109,6 +117,16 @@ impl ClockedDetentDecoder {
         self.interval_movement += i32::from(delta);
         self.position += i32::from(delta);
 
+        // Isolate evidence belonging to this A transition. Keep the window
+        // open across bounce returns; close it only when either level has
+        // remained stable for the full debounce duration.
+        if !self.tracking_a_edge && a_high != self.stable_a {
+            self.tracking_a_edge = true;
+            self.edge_movement = i32::from(delta);
+        } else if self.tracking_a_edge {
+            self.edge_movement += i32::from(delta);
+        }
+
         if a_high == self.candidate_a {
             self.run_a = self.run_a.saturating_add(1);
         } else {
@@ -118,18 +136,35 @@ impl ClockedDetentDecoder {
 
         if self.run_a >= DEBOUNCE_SAMPLES && self.candidate_a != self.stable_a {
             self.stable_a = self.candidate_a;
-            let direction = if self.interval_movement > 0 {
+            let movement = if self.edge_movement != 0 {
+                self.edge_movement
+            } else {
+                self.interval_movement
+            };
+            let direction = if movement > 0 {
                 Some(Detent::Clockwise)
-            } else if self.interval_movement < 0 {
+            } else if movement < 0 {
                 Some(Detent::CounterClockwise)
             } else {
                 self.last_direction
             };
+            self.tracking_a_edge = false;
+            self.edge_movement = 0;
             self.interval_movement = 0;
             if let Some(direction) = direction {
                 self.last_direction = Some(direction);
             }
             return direction;
+        }
+
+        // A glitch returned to its accepted level instead of becoming a
+        // click. Discard only its local evidence.
+        if self.tracking_a_edge
+            && self.run_a >= DEBOUNCE_SAMPLES
+            && self.candidate_a == self.stable_a
+        {
+            self.tracking_a_edge = false;
+            self.edge_movement = 0;
         }
 
         // A completed click can leave a trailing B transition in the next
@@ -318,6 +353,24 @@ mod tests {
 
         harness.decoder.interval_movement = -2;
         harness.hold(S11, STABLE + 1);
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
+    }
+
+    #[test]
+    fn immediate_reversal_uses_current_a_edge_over_old_direction_residue() {
+        let mut harness = Harness::new(true, true);
+
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
+        // No quiet period: model B chatter continually refreshing stale CW
+        // evidence right up to an immediate reversal. Whole-interval
+        // summation would report CW; the current A edge says CCW.
+        harness.decoder.interval_movement = 3;
+        ccw_click_from_00(&mut harness);
+        harness.assert_events(0, 1);
+
+        harness.decoder.interval_movement = -3;
         cw_click_from_11(&mut harness);
         harness.assert_events(1, 0);
     }
