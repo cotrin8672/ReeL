@@ -1,4 +1,6 @@
 use core::convert::Infallible;
+use core::sync::atomic::{AtomicI32, AtomicU16, Ordering};
+
 use defmt::unwrap;
 use embassy_nrf::gpio::Output;
 use embassy_nrf::spim::Spim;
@@ -30,6 +32,34 @@ const SCS_LOW: Duration = Duration::from_micros(6);
 const VCOM_INTERVAL: Duration = Duration::from_millis(33);
 
 static LCD_BUS: StaticCell<Mutex<ThreadModeRawMutex, SharpBus>> = StaticCell::new();
+
+/// Raw rotary encoder diagnostics, written by the encoder task on the left
+/// half and rendered on its LCD. Temporary instrumentation to pin down why
+/// clicks are being lost on the physical unit.
+#[allow(dead_code)]
+pub struct EncoderDiagCounters {
+    /// Raw samples where only phase A changed level (includes bounce edges).
+    pub a_transitions: AtomicU16,
+    /// Raw samples where only phase B changed level (includes bounce edges).
+    pub b_transitions: AtomicU16,
+    /// Raw samples where both phases changed at once (direction unknowable).
+    pub double_transitions: AtomicU16,
+    /// Net quadrature position integrated by the decoder.
+    pub position: AtomicI32,
+    /// Emitted clockwise detents.
+    pub clockwise: AtomicU16,
+    /// Emitted counterclockwise detents.
+    pub counterclockwise: AtomicU16,
+}
+
+pub static ENCODER_DIAG: EncoderDiagCounters = EncoderDiagCounters {
+    a_transitions: AtomicU16::new(0),
+    b_transitions: AtomicU16::new(0),
+    double_transitions: AtomicU16::new(0),
+    position: AtomicI32::new(0),
+    clockwise: AtomicU16::new(0),
+    counterclockwise: AtomicU16::new(0),
+};
 
 struct SharpBus {
     spi: Spim<'static>,
@@ -201,6 +231,30 @@ struct StatusSnapshot {
     split_connected: bool,
     layer: u8,
     profile: u8,
+    encoder_diag: EncoderDiagSnapshot,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+struct EncoderDiagSnapshot {
+    a_transitions: u16,
+    b_transitions: u16,
+    double_transitions: u16,
+    position: i32,
+    clockwise: u16,
+    counterclockwise: u16,
+}
+
+impl EncoderDiagSnapshot {
+    fn capture() -> Self {
+        Self {
+            a_transitions: ENCODER_DIAG.a_transitions.load(Ordering::Relaxed),
+            b_transitions: ENCODER_DIAG.b_transitions.load(Ordering::Relaxed),
+            double_transitions: ENCODER_DIAG.double_transitions.load(Ordering::Relaxed),
+            position: ENCODER_DIAG.position.load(Ordering::Relaxed),
+            clockwise: ENCODER_DIAG.clockwise.load(Ordering::Relaxed),
+            counterclockwise: ENCODER_DIAG.counterclockwise.load(Ordering::Relaxed),
+        }
+    }
 }
 
 impl StatusSnapshot {
@@ -215,6 +269,11 @@ impl StatusSnapshot {
             },
             layer: ctx.layer.min(3),
             profile: ctx.ble_status.profile.min(4),
+            encoder_diag: if central {
+                EncoderDiagSnapshot::default()
+            } else {
+                EncoderDiagSnapshot::capture()
+            },
         }
     }
 }
@@ -362,6 +421,54 @@ where
     advance
 }
 
+fn draw_number<D>(display: &mut D, x: i32, y: i32, value: i32)
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    let mut x = x;
+    let mut magnitude = value.unsigned_abs();
+    if value < 0 {
+        x += draw_character(display, x, y, b'-') + 2;
+    }
+
+    let mut digits = [0_u8; 10];
+    let mut count = 0;
+    loop {
+        digits[count] = b'0' + (magnitude % 10) as u8;
+        count += 1;
+        magnitude /= 10;
+        if magnitude == 0 {
+            break;
+        }
+    }
+    for index in (0..count).rev() {
+        x += draw_character(display, x, y, digits[index]);
+    }
+}
+
+fn draw_encoder_diag<D>(display: &mut D, diag: &EncoderDiagSnapshot)
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    // Clear the area between the battery row and the layer list.
+    for y in 18..62 {
+        for x in 0..LOGICAL_WIDTH as i32 {
+            draw_pixel_color(display, x, y, BinaryColor::Off);
+        }
+    }
+
+    // Left column / right column per row:
+    //   row 1: A transitions | B transitions   (raw, incl. bounce edges)
+    //   row 2: doubles       | net position
+    //   row 3: emitted CW    | emitted CCW
+    draw_number(display, 2, 20, i32::from(diag.a_transitions));
+    draw_number(display, 36, 20, i32::from(diag.b_transitions));
+    draw_number(display, 2, 32, i32::from(diag.double_transitions));
+    draw_number(display, 36, 32, diag.position);
+    draw_number(display, 2, 44, i32::from(diag.clockwise));
+    draw_number(display, 36, 44, i32::from(diag.counterclockwise));
+}
+
 fn draw_battery<D>(display: &mut D, level: Option<u8>, charging: bool)
 where
     D: DrawTarget<Color = BinaryColor>,
@@ -444,6 +551,9 @@ impl DisplayRenderer<BinaryColor> for ReelStatusRenderer {
         draw_split_connection(display, snapshot.split_connected);
         draw_active_layer(display, snapshot.layer);
         draw_profiles(display, snapshot.profile);
+        if !self.central {
+            draw_encoder_diag(display, &snapshot.encoder_diag);
+        }
 
         self.last_snapshot = Some(snapshot);
     }
@@ -459,7 +569,12 @@ pub fn new_status_lcd(
 ) {
     let bus = LCD_BUS.init(Mutex::new(SharpBus::new(spi, cs)));
     let display = SharpDisplay::new(bus);
-    let processor = DisplayProcessor::with_renderer(display, ReelStatusRenderer::new(central))
+    let mut processor = DisplayProcessor::with_renderer(display, ReelStatusRenderer::new(central))
         .with_min_render_interval(VCOM_INTERVAL);
+    if !central {
+        // Poll so the encoder diagnostics refresh even when a click was
+        // swallowed and therefore produced no keyboard event.
+        processor = processor.with_render_interval(Duration::from_millis(200));
+    }
     (processor, SharpVcomRunner { bus })
 }

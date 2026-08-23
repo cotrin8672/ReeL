@@ -38,8 +38,10 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
+use core::sync::atomic::Ordering;
+
 use rotary_decoder::{Detent, QuadratureAccumulator};
-use sharp_lcd::new_status_lcd;
+use sharp_lcd::{ENCODER_DIAG, new_status_lcd};
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
 };
@@ -99,9 +101,18 @@ fn ble_addr() -> [u8; 6] {
 /// samples:
 ///
 /// - Idle: sleep until either phase produces an edge.
-/// - Active: sample both phases every ~250 us, feed them to the accumulator
+/// - Active: sample both phases every ~61 us, feed them to the accumulator
 ///   unfiltered, and forward emitted detents. After ~50 ms without any level
 ///   change, return to edge wakeup.
+///
+/// The fast sampling matters: during the detent snap the knob accelerates,
+/// so the two phase edges of a click can land only a few hundred
+/// microseconds apart. Sampled too slowly they collapse into one ambiguous
+/// double transition and the click is lost.
+///
+/// Every raw sample is also classified (A changed / B changed / both) into
+/// `sharp_lcd::ENCODER_DIAG`, which the left LCD renders for on-device
+/// diagnosis.
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
@@ -137,12 +148,11 @@ async fn encoder_event_task() -> ! {
 
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
-        // Rounds up to the next 32.768 kHz timer tick (~274 us). Far shorter
-        // than the gap between the two phase edges of one click, so real
-        // transitions are never merged into an ambiguous double transition.
-        const SAMPLE_PERIOD_US: u64 = 250;
+        // Two 32.768 kHz timer ticks (~61 us). Short enough to keep the two
+        // phase edges of one click apart even through the fast detent snap.
+        const SAMPLE_PERIOD_TICKS: u64 = 2;
         // ~50 ms without any raw level change before returning to edge wakeup.
-        const QUIET_SAMPLES_TO_IDLE: u32 = 200;
+        const QUIET_SAMPLES_TO_IDLE: u32 = 820;
 
         loop {
             // Idle: no polling while the knob rests quietly.
@@ -157,23 +167,45 @@ impl Runnable for LeftRotaryEncoder {
             loop {
                 if let Some(detent) = self.decoder.update(last_levels.0, last_levels.1) {
                     let direction = match detent {
-                        Detent::Clockwise => Direction::Clockwise,
-                        Detent::CounterClockwise => Direction::CounterClockwise,
+                        Detent::Clockwise => {
+                            ENCODER_DIAG.clockwise.fetch_add(1, Ordering::Relaxed);
+                            Direction::Clockwise
+                        }
+                        Detent::CounterClockwise => {
+                            ENCODER_DIAG.counterclockwise.fetch_add(1, Ordering::Relaxed);
+                            Direction::CounterClockwise
+                        }
                     };
                     ENCODER_DIRECTION_CHANNEL.send(direction).await;
                 }
+                ENCODER_DIAG
+                    .position
+                    .store(self.decoder.position(), Ordering::Relaxed);
 
                 if quiet_samples >= QUIET_SAMPLES_TO_IDLE {
                     break;
                 }
-                Timer::after_micros(SAMPLE_PERIOD_US).await;
+                Timer::after_ticks(SAMPLE_PERIOD_TICKS).await;
                 let levels = (self.pin_a.is_high(), self.pin_b.is_high());
-                if levels == last_levels {
-                    quiet_samples += 1;
-                } else {
-                    quiet_samples = 0;
-                    last_levels = levels;
+                match (levels.0 != last_levels.0, levels.1 != last_levels.1) {
+                    (false, false) => {
+                        quiet_samples += 1;
+                        continue;
+                    }
+                    (true, false) => {
+                        ENCODER_DIAG.a_transitions.fetch_add(1, Ordering::Relaxed);
+                    }
+                    (false, true) => {
+                        ENCODER_DIAG.b_transitions.fetch_add(1, Ordering::Relaxed);
+                    }
+                    (true, true) => {
+                        ENCODER_DIAG
+                            .double_transitions
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
                 }
+                quiet_samples = 0;
+                last_levels = levels;
             }
         }
     }

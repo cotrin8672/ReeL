@@ -93,6 +93,11 @@ impl QuadratureAccumulator {
         }
     }
 
+    /// Net signed quarter-steps integrated since construction.
+    pub fn position(&self) -> i32 {
+        self.position
+    }
+
     /// Feed one raw sample of both phases. Returns a detent when the knob
     /// has completed one full click since the last emitted detent.
     ///
