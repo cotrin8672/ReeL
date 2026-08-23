@@ -11,11 +11,10 @@ use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
-use embassy_nrf::gpiote::{InputChannel, InputChannelPolarity};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{RNG, SPI3, USBD};
+use embassy_nrf::peripherals::{QDEC, RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
-use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
+use embassy_nrf::{bind_interrupts, qdec, rng, saadc, spim, usb};
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use nrf_mpsl::Flash;
@@ -38,7 +37,7 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
-use rotary_decoder::{DetentDirection, StableAEdgeDecoder, UpdateResult};
+use rotary_decoder::{DetentDirection, StableADirectionDecoder, UpdateResult};
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -47,6 +46,7 @@ use xiao_battery::{
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
     RNG => rng::InterruptHandler<RNG>;
+    QDEC => qdec::InterruptHandler<QDEC>;
     EGU0_SWI0 => nrf_sdc::mpsl::LowPrioInterruptHandler;
     CLOCK_POWER => nrf_sdc::mpsl::ClockInterruptHandler, usb::vbus_detect::InterruptHandler;
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
@@ -90,27 +90,33 @@ fn ble_addr() -> [u8; 6] {
     unwrap!(addr.to_le_bytes()[..6].try_into())
 }
 
-const ENCODER_POLL_US: u64 = 100;
-
-/// Decoder for the encoder's 9-pulse/18-detent waveform. P1_14 is the
-/// specified A phase: every stable A edge is one click. P1_15 is sampled only
-/// at that edge for direction, so its undefined detent level is never decoded
-/// as movement.
-struct LeftRotaryEncoder {
-    input_a: InputChannel<'static>,
-    input_b: Input<'static>,
-    decoder: StableAEdgeDecoder,
+/// Count clicks from stable P1_14 changes and obtain only their direction from
+/// QDEC's signed movement. Raw QDEC magnitude is deliberately never treated as
+/// a click count.
+struct LeftRotaryEncoder<'d> {
+    _qdec: qdec::Qdec<'d>,
+    decoder: StableADirectionDecoder,
 }
 
-impl LeftRotaryEncoder {
-    fn new(input_a: InputChannel<'static>, input_b: Input<'static>) -> Self {
-        let initial_a_high = input_a.pin().is_high();
+impl<'d> LeftRotaryEncoder<'d> {
+    fn new(qdec: qdec::Qdec<'d>) -> Self {
+        let initial_a_high = embassy_nrf::pac::P1.in_().read().pin(14);
+        // Discard movement accumulated while the QDEC and task are being
+        // initialized. The current A level is the decoder's baseline.
+        let _ = read_and_clear_qdec();
         Self {
-            input_a,
-            input_b,
-            decoder: StableAEdgeDecoder::new(initial_a_high),
+            _qdec: qdec,
+            decoder: StableADirectionDecoder::new(initial_a_high),
         }
     }
+}
+
+const ENCODER_POLL_US: u64 = 100;
+
+fn read_and_clear_qdec() -> i16 {
+    let qdec = embassy_nrf::pac::QDEC;
+    qdec.tasks_rdclracc().write_value(1);
+    qdec.accread().read() as i16
 }
 
 const ENCODER_EVENT_QUEUE_SIZE: usize = 64;
@@ -129,27 +135,22 @@ async fn encoder_event_task() -> ! {
     }
 }
 
-impl Runnable for LeftRotaryEncoder {
+impl Runnable for LeftRotaryEncoder<'_> {
     async fn run(&mut self) -> ! {
         loop {
-            self.input_a.wait().await;
-
-            loop {
-                let result = self
-                    .decoder
-                    .update(self.input_a.pin().is_high(), self.input_b.is_high());
-                match result {
-                    UpdateResult::Idle => break,
-                    UpdateResult::Settling => Timer::after_micros(ENCODER_POLL_US).await,
-                    UpdateResult::Detent(detent) => {
-                        let direction = match detent {
-                            DetentDirection::Clockwise => Direction::Clockwise,
-                            DetentDirection::CounterClockwise => Direction::CounterClockwise,
-                        };
-                        ENCODER_DIRECTION_CHANNEL.send(direction).await;
-                        break;
-                    }
+            Timer::after_micros(ENCODER_POLL_US).await;
+            let a_high = embassy_nrf::pac::P1.in_().read().pin(14);
+            match self.decoder.update(a_high, read_and_clear_qdec()) {
+                UpdateResult::Detent(detent) => {
+                    let direction = match detent {
+                        DetentDirection::Positive => Direction::CounterClockwise,
+                        DetentDirection::Negative => Direction::Clockwise,
+                    };
+                    // Capture stays independent of the 5 ms key-tap task until
+                    // the queue is genuinely full.
+                    ENCODER_DIRECTION_CHANNEL.send(direction).await;
                 }
+                UpdateResult::Idle | UpdateResult::Settling | UpdateResult::Resynchronized => {}
             }
         }
     }
@@ -228,14 +229,11 @@ async fn main(spawner: Spawner) {
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
-    let encoder_a = InputChannel::new(
-        p.GPIOTE_CH0,
-        p.P1_14,
-        Pull::Up,
-        InputChannelPolarity::Toggle,
-    );
-    let encoder_b = Input::new(p.P1_15, Pull::Up);
-    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
+    let mut encoder_qdec_config = qdec::Config::default();
+    encoder_qdec_config.period = qdec::SamplePeriod::_128us;
+    encoder_qdec_config.debounce = true;
+    let encoder_qdec = qdec::Qdec::new(p.QDEC, Irqs, p.P1_14, p.P1_15, encoder_qdec_config);
+    let mut encoder = LeftRotaryEncoder::new(encoder_qdec);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 

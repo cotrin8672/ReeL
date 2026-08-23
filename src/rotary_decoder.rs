@@ -1,208 +1,188 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DetentDirection {
-    Clockwise,
-    CounterClockwise,
+    Positive,
+    Negative,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UpdateResult {
     Idle,
     Settling,
+    Resynchronized,
     Detent(DetentDirection),
 }
 
-/// Number of consecutive 100 us samples required to accept a new A level.
-///
-/// The encoder permits up to 3 ms of contact chatter. A transition therefore
-/// becomes one click only after the candidate A level has remained unchanged
-/// for the complete chatter interval. The edge sample plus 30 later samples
-/// spans 3 ms.
-const A_STABLE_SAMPLES: u8 = 31;
-
-/// Debounces the encoder's specified A phase and emits once per stable edge.
-///
-/// This 9-pulse/18-detent encoder specifies the A level, but not the B level,
-/// at a mechanical detent. Every stable rising or falling edge of A is one of
-/// the 18 click intervals. B is used only at that A edge to determine the
-/// quadrature direction; its arbitrary level at the detent is ignored.
-///
-/// Crucially, `candidate_b_high` is replaced whenever A changes again. The
-/// direction therefore comes from the last A edge that survives contact
-/// chatter, never from the first bouncing edge.
-pub struct StableAEdgeDecoder {
+/// P1_14 remained a reliable one-change-per-click signal on the device, but
+/// sampling the other phase at that edge produced alternating directions.
+/// QDEC, conversely, provided a reliable signed movement but its raw count is
+/// not a detent count. This decoder deliberately keeps those jobs separate.
+pub struct StableADirectionDecoder {
     confirmed_a_high: bool,
     candidate_a_high: bool,
-    candidate_b_high: bool,
-    stable_samples: u8,
+    candidate_samples: u8,
+    origin_samples: u8,
+    movement: i32,
 }
 
-impl StableAEdgeDecoder {
+/// The encoder allows up to 3 ms of contact chatter. At a 100 us task period,
+/// 31 consecutive samples span the initial sample plus 3 ms.
+const A_STABLE_SAMPLES: u8 = 31;
+
+impl StableADirectionDecoder {
     pub const fn new(initial_a_high: bool) -> Self {
         Self {
             confirmed_a_high: initial_a_high,
             candidate_a_high: initial_a_high,
-            candidate_b_high: false,
-            stable_samples: 0,
+            candidate_samples: 0,
+            origin_samples: 0,
+            movement: 0,
         }
     }
 
-    pub const fn is_settling(&self) -> bool {
-        self.candidate_a_high != self.confirmed_a_high
-    }
+    pub fn update(&mut self, a_high: bool, qdec_delta: i16) -> UpdateResult {
+        self.movement = self.movement.saturating_add(i32::from(qdec_delta));
 
-    pub fn update(&mut self, a_high: bool, b_high: bool) -> UpdateResult {
         if a_high == self.confirmed_a_high {
             self.candidate_a_high = self.confirmed_a_high;
-            self.stable_samples = 0;
+            self.candidate_samples = 0;
+            self.origin_samples = self.origin_samples.saturating_add(1);
+
+            // A departure that settles back at the accepted level was contact
+            // chatter or an abandoned partial turn. Do not carry its residual
+            // signed movement into the next real click.
+            if self.origin_samples >= A_STABLE_SAMPLES {
+                self.movement = 0;
+            }
             return UpdateResult::Idle;
         }
 
+        self.origin_samples = 0;
         if a_high != self.candidate_a_high {
             self.candidate_a_high = a_high;
-            self.candidate_b_high = b_high;
-            self.stable_samples = 1;
+            self.candidate_samples = 1;
         } else {
-            self.stable_samples = self.stable_samples.saturating_add(1);
+            self.candidate_samples = self.candidate_samples.saturating_add(1);
         }
 
-        if self.stable_samples < A_STABLE_SAMPLES {
+        if self.candidate_samples < A_STABLE_SAMPLES {
             return UpdateResult::Settling;
         }
 
         self.confirmed_a_high = self.candidate_a_high;
-        self.stable_samples = 0;
-        UpdateResult::Detent(direction_from_a_edge(
-            self.confirmed_a_high,
-            self.candidate_b_high,
-        ))
-    }
-}
+        self.candidate_samples = 0;
+        let movement = core::mem::replace(&mut self.movement, 0);
 
-/// Quadrature truth table evaluated only at a confirmed A edge.
-pub const fn direction_from_a_edge(
-    a_high_after_edge: bool,
-    b_high_at_edge: bool,
-) -> DetentDirection {
-    if a_high_after_edge != b_high_at_edge {
-        DetentDirection::Clockwise
-    } else {
-        DetentDirection::CounterClockwise
+        if movement > 0 {
+            UpdateResult::Detent(DetentDirection::Positive)
+        } else if movement < 0 {
+            UpdateResult::Detent(DetentDirection::Negative)
+        } else {
+            // A stable level change without a valid signed QDEC transition can
+            // only be a startup/resynchronization case or a hardware double
+            // transition. Accept the new baseline without inventing a click.
+            UpdateResult::Resynchronized
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{A_STABLE_SAMPLES, DetentDirection, StableAEdgeDecoder, UpdateResult};
+    use super::{A_STABLE_SAMPLES, DetentDirection, StableADirectionDecoder, UpdateResult};
 
-    fn settle(decoder: &mut StableAEdgeDecoder, a_high: bool, b_high: bool) -> UpdateResult {
-        let mut result = UpdateResult::Idle;
-        for _ in 0..A_STABLE_SAMPLES {
-            result = decoder.update(a_high, b_high);
+    fn settle(
+        decoder: &mut StableADirectionDecoder,
+        a_high: bool,
+        first_delta: i16,
+    ) -> UpdateResult {
+        let mut result = decoder.update(a_high, first_delta);
+        for _ in 1..A_STABLE_SAMPLES {
+            result = decoder.update(a_high, 0);
         }
         result
     }
 
     #[test]
-    fn each_a_edge_emits_one_click_in_the_same_clockwise_direction() {
-        let mut decoder = StableAEdgeDecoder::new(false);
-        for click in 0..18 {
-            let a_high = click % 2 == 0;
-            let b_high = !a_high;
+    fn qdec_magnitude_never_multiplies_one_a_click() {
+        for delta in [1, 2, 3, 12] {
+            let mut decoder = StableADirectionDecoder::new(false);
             assert_eq!(
-                settle(&mut decoder, a_high, b_high),
-                UpdateResult::Detent(DetentDirection::Clockwise),
-                "click {click}"
+                settle(&mut decoder, true, delta),
+                UpdateResult::Detent(DetentDirection::Positive),
+                "delta={delta}"
             );
+            for _ in 0..A_STABLE_SAMPLES {
+                assert_eq!(decoder.update(true, delta), UpdateResult::Idle);
+            }
         }
     }
 
     #[test]
-    fn each_a_edge_emits_one_click_in_the_same_counterclockwise_direction() {
-        let mut decoder = StableAEdgeDecoder::new(false);
-        for click in 0..18 {
-            let a_high = click % 2 == 0;
-            let b_high = a_high;
-            assert_eq!(
-                settle(&mut decoder, a_high, b_high),
-                UpdateResult::Detent(DetentDirection::CounterClockwise),
-                "click {click}"
-            );
+    fn eighteen_a_changes_emit_eighteen_identical_clicks() {
+        for (delta, expected) in [
+            (2, DetentDirection::Positive),
+            (-2, DetentDirection::Negative),
+        ] {
+            let mut decoder = StableADirectionDecoder::new(false);
+            let mut a_high = false;
+            for click in 0..18 {
+                a_high = !a_high;
+                assert_eq!(
+                    settle(&mut decoder, a_high, delta),
+                    UpdateResult::Detent(expected),
+                    "click={click}"
+                );
+            }
         }
     }
 
     #[test]
-    fn arbitrary_b_at_detents_never_emits_or_reverses_a_click() {
-        let mut decoder = StableAEdgeDecoder::new(false);
+    fn qdec_chatter_cancels_without_alternating_the_direction() {
+        let mut decoder = StableADirectionDecoder::new(false);
+        assert_eq!(decoder.update(true, 1), UpdateResult::Settling);
+        assert_eq!(decoder.update(true, -1), UpdateResult::Settling);
+        assert_eq!(decoder.update(true, 1), UpdateResult::Settling);
 
-        for b_high in [true, false, true, false, true] {
-            assert_eq!(decoder.update(false, b_high), UpdateResult::Idle);
-        }
-        assert_eq!(
-            settle(&mut decoder, true, false),
-            UpdateResult::Detent(DetentDirection::Clockwise)
-        );
-
-        for b_high in [false, true, false, true, false] {
-            assert_eq!(decoder.update(true, b_high), UpdateResult::Idle);
-        }
-        assert_eq!(
-            settle(&mut decoder, false, true),
-            UpdateResult::Detent(DetentDirection::Clockwise)
-        );
-    }
-
-    #[test]
-    fn first_bouncing_edge_cannot_fix_the_wrong_direction() {
-        let mut decoder = StableAEdgeDecoder::new(false);
-
-        // The first departure carries the opposite direction but bounces
-        // back. It must not survive into the following real A edge.
-        for _ in 0..8 {
-            assert_eq!(decoder.update(true, true), UpdateResult::Settling);
-        }
-        assert_eq!(decoder.update(false, true), UpdateResult::Idle);
-
-        assert_eq!(
-            settle(&mut decoder, true, false),
-            UpdateResult::Detent(DetentDirection::Clockwise)
-        );
-    }
-
-    #[test]
-    fn b_changes_after_the_a_edge_cannot_change_its_direction() {
-        let mut decoder = StableAEdgeDecoder::new(false);
-
-        assert_eq!(decoder.update(true, false), UpdateResult::Settling);
         let mut result = UpdateResult::Settling;
-        for _ in 1..A_STABLE_SAMPLES {
-            result = decoder.update(true, true);
+        for _ in 3..A_STABLE_SAMPLES {
+            result = decoder.update(true, 0);
         }
-        assert_eq!(result, UpdateResult::Detent(DetentDirection::Clockwise));
+        assert_eq!(result, UpdateResult::Detent(DetentDirection::Positive));
     }
 
     #[test]
-    fn incomplete_a_edge_never_emits() {
-        let mut decoder = StableAEdgeDecoder::new(false);
-        for _ in 1..A_STABLE_SAMPLES {
-            assert_eq!(decoder.update(true, false), UpdateResult::Settling);
-        }
-        assert_eq!(decoder.update(false, false), UpdateResult::Idle);
-        assert!(!decoder.is_settling());
+    fn first_click_after_reversal_uses_only_the_new_movement() {
+        let mut decoder = StableADirectionDecoder::new(false);
+        assert_eq!(
+            settle(&mut decoder, true, 2),
+            UpdateResult::Detent(DetentDirection::Positive)
+        );
+        assert_eq!(
+            settle(&mut decoder, false, -2),
+            UpdateResult::Detent(DetentDirection::Negative)
+        );
     }
 
     #[test]
-    fn reversal_uses_only_the_new_edge_direction() {
-        let mut decoder = StableAEdgeDecoder::new(false);
-        assert_eq!(
-            settle(&mut decoder, true, false),
-            UpdateResult::Detent(DetentDirection::Clockwise)
-        );
+    fn an_incomplete_departure_cannot_leak_into_the_next_click() {
+        let mut decoder = StableADirectionDecoder::new(false);
+        for _ in 0..10 {
+            assert_eq!(decoder.update(true, 1), UpdateResult::Settling);
+            assert_eq!(decoder.update(false, -1), UpdateResult::Idle);
+        }
+        for _ in 0..A_STABLE_SAMPLES {
+            assert_eq!(decoder.update(false, 0), UpdateResult::Idle);
+        }
 
-        // Reversing crosses the same A edge in the opposite direction. No
-        // previous-direction latch is involved.
         assert_eq!(
-            settle(&mut decoder, false, false),
-            UpdateResult::Detent(DetentDirection::CounterClockwise)
+            settle(&mut decoder, true, -2),
+            UpdateResult::Detent(DetentDirection::Negative)
         );
+    }
+
+    #[test]
+    fn stable_a_change_without_qdec_direction_only_resynchronizes() {
+        let mut decoder = StableADirectionDecoder::new(false);
+        assert_eq!(settle(&mut decoder, true, 0), UpdateResult::Resynchronized);
+        assert_eq!(decoder.update(true, 1), UpdateResult::Idle);
     }
 }
