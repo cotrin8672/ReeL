@@ -99,7 +99,9 @@ fn ble_addr() -> [u8; 6] {
 /// snap, so only phase A produces a readable edge per click (verified with
 /// the on-device diagnostics). `rotary_decoder::ClockedDetentDecoder`
 /// therefore uses A as the click clock and B's debounced level as the
-/// direction bit; this task only supplies raw samples:
+/// direction bit, resolved a few ms after the edge because B's toggle can
+/// ride just ahead of A's edge in one rotation direction; this task only
+/// supplies raw samples:
 ///
 /// - Idle: sleep until either phase produces an edge.
 /// - Active: sample both phases every ~61 us, feed them to the decoder

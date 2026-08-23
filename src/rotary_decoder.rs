@@ -4,44 +4,43 @@
 //! ## What the part actually outputs (measured on the device)
 //!
 //! On-device diagnostics (raw transition counters on the left LCD, sampled
-//! every ~61 us) showed, for 4 slow clicks in one direction:
+//! every ~61 us) established, click by click:
 //!
-//! - 4 clean single transitions of phase A, one per click, all with the
-//!   correct direction sign — A toggles midway between detents where the
-//!   knob moves slowly, exactly as the datasheet draws it.
-//! - 0 clean single transitions of phase B. B toggles *at* the detent rest
-//!   positions, and the detent spring snaps the shaft through that zone in
-//!   well under a sample period, together with contact bounce on both
-//!   phases. B's edge is therefore never observable as a valid Gray-code
-//!   step: it always arrives as an ambiguous both-bits-changed double.
+//! - Phase A produces exactly one real level change per click, in both
+//!   directions. It is the only reliable per-click signal ("the clock").
+//! - Phase B toggles once per click, but *where* it toggles depends on the
+//!   rotation direction (contact hysteresis):
+//!   - In one direction B toggles inside the detent snap *after* A's edge,
+//!     buried in bounce, often in the very same sample as an A bounce
+//!     (ambiguous double transitions).
+//!   - In the other direction B toggles *just before* A's edge —
+//!     sub-millisecond before it, with its bounce tail crossing the edge.
 //!
-//! So a full quadrature accumulator can only ever integrate ±1 per click
-//! (A's step); the ±2-per-click threshold then fires on every second click.
-//! Treating this part as a generic quadrature encoder is what every failed
-//! attempt in this repository's history has in common.
+//! That second case broke the previous revision of this decoder: it read
+//! B's *debounced* level at the moment A's edge confirmed, and in the
+//! B-leading direction that level was still the stale pre-toggle value on
+//! every other click (B's rise and fall sit at different offsets), which
+//! produced the alternating up/down output.
 //!
 //! ## How this decoder works
 //!
-//! The part is decoded the way its geometry intends:
+//! - **Phase A is the clock.** One debounced A level change
+//!   ([`DEBOUNCE_SAMPLES`] consecutive samples, ~1 ms) = one click. A rests
+//!   far from its threshold, so it is quiet at rest and its edge sits
+//!   mid-travel, clear of the snap.
+//! - **Direction is resolved [`DIRECTION_RESOLVE_SAMPLES`] samples (~3 ms)
+//!   after the confirmed A edge**, as `stable_a XOR stable_b`. By then:
+//!   - If B toggled just before / around the edge (B-leading direction),
+//!     its new level has settled and is used — correct.
+//!   - If B toggles at the *next* snap (A-leading direction), that snap is
+//!     at least half a click of travel away (tens of ms at human speeds),
+//!     far outside the window, so the pre-edge level is used — correct.
+//! - B itself never emits anything; its rest chatter and snap bounce only
+//!   ever update the debounced direction reference.
 //!
-//! - **Phase A is the clock.** One debounced A level change = one click.
-//!   A rests far from its own threshold, so it is quiet at rest; its edge
-//!   sits mid-travel, clear of the snap. Bounce is removed by requiring the
-//!   new level to persist for [`DEBOUNCE_SAMPLES`] consecutive samples.
-//! - **Phase B is the direction bit.** At A's edge the direction is
-//!   `stable_a XOR stable_b`, using B's last *debounced* level — i.e. the
-//!   level B held during travel, from *before* the edge. (The historical
-//!   bug was sampling B shortly *after* A's edge, which can land inside the
-//!   snap where B is bouncing; that produced the "one direction fine, the
-//!   other alternates up/down" symptom.)
-//! - B never emits anything. Its rest chatter and its unreadable snap edge
-//!   only ever update the direction reference once a level has been held
-//!   long enough to be trustworthy.
-//!
-//! Between two adjacent detents B is constant (its edges are at the
-//! detents), so by the time A's mid-travel edge arrives, B has been settled
-//! for about half a click of travel in either rotation direction — orders
-//! of magnitude longer than the debounce window, even when spinning fast.
+//! The ~4 ms total latency (debounce + resolve window) is imperceptible.
+//! The scheme misreads direction only if a full click takes less than the
+//! resolve window (hundreds of clicks per second — not reachable by hand).
 
 /// One physical detent click.
 ///
@@ -56,9 +55,17 @@ pub enum Detent {
 }
 
 /// Consecutive identical samples required before a level counts as settled.
-/// At the ~61 us sample period this is ~1 ms — longer than contact bounce,
-/// far shorter than the shortest plateau between edges when spinning fast.
+/// At the ~61 us sample period this is ~1 ms — longer than most contact
+/// bounce, far shorter than the shortest plateau between edges when
+/// spinning fast.
 pub const DEBOUNCE_SAMPLES: u8 = 16;
+
+/// Samples between a confirmed A edge and the direction decision (~3 ms at
+/// the ~61 us sample period). Long enough for a B toggle that rides just
+/// ahead of A's edge (bounce tail included) to settle; short enough that
+/// the *next* B toggle — at least half a click of travel away — can never
+/// intrude at human rotation speeds.
+pub const DIRECTION_RESOLVE_SAMPLES: u8 = 49;
 
 pub struct ClockedDetentDecoder {
     stable_a: bool,
@@ -67,6 +74,9 @@ pub struct ClockedDetentDecoder {
     candidate_b: bool,
     run_a: u8,
     run_b: u8,
+    /// A level of a click awaiting its direction decision.
+    pending_a: Option<bool>,
+    resolve_countdown: u8,
 }
 
 impl ClockedDetentDecoder {
@@ -78,11 +88,21 @@ impl ClockedDetentDecoder {
             candidate_b: b_high,
             run_a: DEBOUNCE_SAMPLES,
             run_b: DEBOUNCE_SAMPLES,
+            pending_a: None,
+            resolve_countdown: 0,
         }
     }
 
-    /// Feed one raw sample of both phases. Returns a detent when phase A
-    /// completes a debounced level change.
+    fn resolve(&self, a_level: bool) -> Detent {
+        if a_level != self.stable_b {
+            Detent::Clockwise
+        } else {
+            Detent::CounterClockwise
+        }
+    }
+
+    /// Feed one raw sample of both phases. Returns a detent once a debounced
+    /// phase A level change has its direction resolved.
     pub fn update(&mut self, a_high: bool, b_high: bool) -> Option<Detent> {
         if a_high == self.candidate_a {
             self.run_a = self.run_a.saturating_add(1);
@@ -97,31 +117,39 @@ impl ClockedDetentDecoder {
             self.run_b = 1;
         }
 
-        let mut detent = None;
-        if self.run_a >= DEBOUNCE_SAMPLES && self.candidate_a != self.stable_a {
-            self.stable_a = self.candidate_a;
-            // Direction from B's level held during travel, before this edge.
-            detent = Some(if self.stable_a != self.stable_b {
-                Detent::Clockwise
-            } else {
-                Detent::CounterClockwise
-            });
-        }
-        // Promote B only after the direction was taken, so that in the
-        // (theoretical) case of both phases settling in the same sample the
-        // pre-edge B level is still the one that decides.
+        // Promote B before anything else so a toggle settling in this very
+        // sample is visible to a direction decision made below.
         if self.run_b >= DEBOUNCE_SAMPLES && self.candidate_b != self.stable_b {
             self.stable_b = self.candidate_b;
         }
-        detent
+
+        if self.run_a >= DEBOUNCE_SAMPLES && self.candidate_a != self.stable_a {
+            self.stable_a = self.candidate_a;
+            // A new click before the previous one resolved (not reachable at
+            // human speeds): flush the old one with the best current guess.
+            let flushed = self.pending_a.take().map(|level| self.resolve(level));
+            self.pending_a = Some(self.stable_a);
+            self.resolve_countdown = DIRECTION_RESOLVE_SAMPLES;
+            return flushed;
+        }
+
+        if let Some(level) = self.pending_a {
+            self.resolve_countdown -= 1;
+            if self.resolve_countdown == 0 {
+                self.pending_a = None;
+                return Some(self.resolve(level));
+            }
+        }
+        None
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ClockedDetentDecoder, DEBOUNCE_SAMPLES, Detent};
+    use super::{ClockedDetentDecoder, DEBOUNCE_SAMPLES, DIRECTION_RESOLVE_SAMPLES, Detent};
 
     const STABLE: usize = DEBOUNCE_SAMPLES as usize;
+    const RESOLVED: usize = DIRECTION_RESOLVE_SAMPLES as usize + STABLE + 1;
 
     struct Harness {
         decoder: ClockedDetentDecoder,
@@ -175,12 +203,12 @@ mod tests {
     const S00: (bool, bool) = (false, false);
     const S10: (bool, bool) = (true, false);
 
-    /// One measured-style CW click starting from a settled (1,1) rest:
-    /// bouncy A edge mid-travel, then the snap where both phases jitter
-    /// together and B comes out flipped.
+    /// Measured CW anatomy (A-leading direction): bouncy A edge mid-travel,
+    /// then the arrival snap where both phases jitter together and B comes
+    /// out flipped.
     fn cw_click_from_11(harness: &mut Harness) {
         harness.flap(S01, S11, 3, 5); // A edge with bounce
-        harness.hold(S01, 200); // mid-travel plateau
+        harness.hold(S01, 200); // mid-travel plateau; direction resolves here
         harness.flap(S00, S11, 2, 6); // snap: ambiguous doubles
         harness.hold(S00, 200); // settled at the next rest
     }
@@ -192,22 +220,30 @@ mod tests {
         harness.hold(S11, 200);
     }
 
-    /// One CCW click starting from a settled (0,0) rest: B crawls across
-    /// its threshold at departure (long flaps), then A edges mid-travel.
+    /// Measured CCW anatomy (B-leading direction): B toggles just before
+    /// A's edge with its bounce tail crossing it, then A edges. This is the
+    /// case that made the previous revision alternate up/down.
+    fn ccw_click_from_11(harness: &mut Harness) {
+        harness.hold(S10, 3); // B real toggle, still bouncing...
+        harness.hold(S11, 2);
+        harness.hold(S10, 4);
+        harness.hold(S00, 200); // ...A edges while B's tail settles
+    }
+
     fn ccw_click_from_00(harness: &mut Harness) {
+        harness.hold(S01, 3);
+        harness.hold(S00, 2);
+        harness.hold(S01, 4);
+        harness.hold(S11, 200);
+    }
+
+    /// B-leading click where the user crawls: B settles well before A edges.
+    fn slow_ccw_click_from_00(harness: &mut Harness) {
         harness.hold(S01, STABLE + 5); // B settles high at departure
         harness.hold(S00, 3); // one late B bounce, too short to matter
         harness.hold(S01, 200);
         harness.flap(S11, S01, 3, 5); // A edge with bounce
-        harness.hold(S11, 200); // settled at the next rest
-    }
-
-    fn ccw_click_from_11(harness: &mut Harness) {
-        harness.hold(S10, STABLE + 5);
-        harness.hold(S11, 3);
-        harness.hold(S10, 200);
-        harness.flap(S00, S10, 3, 5);
-        harness.hold(S00, 200);
+        harness.hold(S11, 200);
     }
 
     #[test]
@@ -220,11 +256,27 @@ mod tests {
     }
 
     #[test]
-    fn ccw_clicks_emit_exactly_once_per_click() {
-        let mut harness = Harness::new(false, false);
+    fn ccw_clicks_emit_exactly_once_per_click_despite_b_leading_tightly() {
+        let mut harness = Harness::new(true, true);
+        ccw_click_from_11(&mut harness);
+        harness.assert_events(0, 1);
         ccw_click_from_00(&mut harness);
         harness.assert_events(0, 1);
-        ccw_click_from_11(&mut harness);
+    }
+
+    #[test]
+    fn slow_b_leading_clicks_are_also_correct() {
+        let mut harness = Harness::new(false, false);
+        slow_ccw_click_from_00(&mut harness);
+        harness.assert_events(0, 1);
+    }
+
+    #[test]
+    fn settled_double_transition_resolves_as_b_led() {
+        // Both phases flip in the same sample and stay: only the B-leading
+        // anatomy produces this, so it must count as one CCW click.
+        let mut harness = Harness::new(true, true);
+        harness.hold(S00, RESOLVED + 200);
         harness.assert_events(0, 1);
     }
 
@@ -287,14 +339,22 @@ mod tests {
 
     #[test]
     fn fast_rotation_still_counts_every_click() {
-        // ~2 ms per half-click plateau: just over the debounce window.
+        // ~5 ms per quadrature state = ~50 clicks/s, faster than a hand
+        // flick. Each direction decision must land inside its own plateau.
         let mut harness = Harness::new(true, true);
         for _ in 0..9 {
-            harness.hold(S01, STABLE * 2);
-            harness.hold(S00, STABLE * 2);
-            harness.hold(S10, STABLE * 2);
-            harness.hold(S11, STABLE * 2);
+            harness.hold(S01, 80);
+            harness.hold(S00, 80);
+            harness.hold(S10, 80);
+            harness.hold(S11, 80);
         }
         harness.assert_events(18, 0);
+        for _ in 0..9 {
+            harness.hold(S10, 80);
+            harness.hold(S00, 80);
+            harness.hold(S01, 80);
+            harness.hold(S11, 80);
+        }
+        harness.assert_events(0, 18);
     }
 }
