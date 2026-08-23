@@ -1,46 +1,30 @@
-//! Decoder for the left-half rotary encoder (BM4.0A01 style, 9 pulse /
-//! 18 click).
+//! Decoder for the left rotary encoder (BM4.0A01, 9 pulse / 18 click).
 //!
-//! ## What the part actually outputs (measured on the device)
+//! Device measurements established two independent facts:
 //!
-//! On-device diagnostics (raw transition counters on the left LCD, sampled
-//! every ~61 us) established, click by click:
+//! - A has one debounced level change per physical click, so it is the
+//!   reliable click clock.
+//! - The raw valid Gray-code transitions have a consistent sign for a
+//!   rotation direction. The first diagnostic build measured a net `-4`
+//!   over four clicks even though the old ±2 threshold emitted only twice.
 //!
-//! - Phase A produces exactly one real level change per click, in both
-//!   directions. It is the only reliable per-click signal ("the clock").
-//! - Phase B toggles once per click, but *where* it toggles depends on the
-//!   rotation direction (contact hysteresis):
-//!   - In one direction B toggles inside the detent snap *after* A's edge,
-//!     buried in bounce, often in the very same sample as an A bounce
-//!     (ambiguous double transitions).
-//!   - In the other direction B toggles *just before* A's edge —
-//!     sub-millisecond before it, with its bounce tail crossing the edge.
+//! Reading B at a fixed time relative to A is not valid for this part.
+//! Contact hysteresis puts B just before A in one direction and just after A
+//! in the other; changing the delay merely swaps which direction is wrong.
 //!
-//! That second case broke the previous revision of this decoder: it read
-//! B's *debounced* level at the moment A's edge confirmed, and in the
-//! B-leading direction that level was still the stale pre-toggle value on
-//! every other click (B's rise and fall sit at different offsets), which
-//! produced the alternating up/down output.
+//! This decoder therefore keeps click and direction independent:
 //!
-//! ## How this decoder works
+//! - A debounces to exactly one event per click.
+//! - Every raw one-bit Gray transition contributes +1 or -1 to signed
+//!   movement. Bounce contributes opposite pairs and cancels.
+//! - When A confirms a click, the sign accumulated since the previous
+//!   confirmed A click gives its direction. No instantaneous B read and no
+//!   timing window is involved.
 //!
-//! - **Phase A is the clock.** One debounced A level change
-//!   ([`DEBOUNCE_SAMPLES`] consecutive samples, ~1 ms) = one click. A rests
-//!   far from its threshold, so it is quiet at rest and its edge sits
-//!   mid-travel, clear of the snap.
-//! - **Direction is resolved [`DIRECTION_RESOLVE_SAMPLES`] samples (~3 ms)
-//!   after the confirmed A edge**, as `stable_a XOR stable_b`. By then:
-//!   - If B toggled just before / around the edge (B-leading direction),
-//!     its new level has settled and is used — correct.
-//!   - If B toggles at the *next* snap (A-leading direction), that snap is
-//!     at least half a click of travel away (tens of ms at human speeds),
-//!     far outside the window, so the pre-edge level is used — correct.
-//! - B itself never emits anything; its rest chatter and snap bounce only
-//!   ever update the debounced direction reference.
-//!
-//! The ~4 ms total latency (debounce + resolve window) is imperceptible.
-//! The scheme misreads direction only if a full click takes less than the
-//! resolve window (hundreds of clicks per second — not reachable by hand).
+//! A sampled two-bit transition contains no direction information and adds
+//! zero. If an entire click is such a transition (not observed in the
+//! four-click signed-position measurement), the previous direction is the
+//! only physically defensible fallback.
 
 /// One physical detent click.
 ///
@@ -54,91 +38,82 @@ pub enum Detent {
     CounterClockwise,
 }
 
-/// Consecutive identical samples required before a level counts as settled.
-/// At the ~61 us sample period this is ~1 ms — longer than most contact
-/// bounce, far shorter than the shortest plateau between edges when
-/// spinning fast.
+/// Consecutive identical A samples required before a click is accepted.
+/// At the ~61 us sample period this is about 1 ms.
 pub const DEBOUNCE_SAMPLES: u8 = 16;
 
-/// Samples between a confirmed A edge and the direction decision (~3 ms at
-/// the ~61 us sample period). Long enough for a B toggle that rides just
-/// ahead of A's edge (bounce tail included) to settle; short enough that
-/// the *next* B toggle — at least half a click of travel away — can never
-/// intrude at human rotation speeds.
-pub const DIRECTION_RESOLVE_SAMPLES: u8 = 49;
+/// +1 follows the datasheet CW sequence
+/// `11 -> 01 -> 00 -> 10 -> 11`; -1 follows the reverse sequence.
+const TRANSITION_DELTA: [i8; 16] = [
+    0, -1, 1, 0, // from 00
+    1, 0, 0, -1, // from 01
+    -1, 0, 0, 1, // from 10
+    0, 1, -1, 0, // from 11
+];
+
+const fn encode(a_high: bool, b_high: bool) -> u8 {
+    ((a_high as u8) << 1) | (b_high as u8)
+}
 
 pub struct ClockedDetentDecoder {
     stable_a: bool,
-    stable_b: bool,
     candidate_a: bool,
-    candidate_b: bool,
     run_a: u8,
-    run_b: u8,
-    /// A level of a click awaiting its direction decision.
-    pending_a: Option<bool>,
-    resolve_countdown: u8,
+    previous_state: u8,
+    interval_movement: i32,
+    position: i32,
+    last_direction: Option<Detent>,
 }
 
 impl ClockedDetentDecoder {
     pub const fn new(a_high: bool, b_high: bool) -> Self {
         Self {
             stable_a: a_high,
-            stable_b: b_high,
             candidate_a: a_high,
-            candidate_b: b_high,
             run_a: DEBOUNCE_SAMPLES,
-            run_b: DEBOUNCE_SAMPLES,
-            pending_a: None,
-            resolve_countdown: 0,
+            previous_state: encode(a_high, b_high),
+            interval_movement: 0,
+            position: 0,
+            last_direction: None,
         }
     }
 
-    fn resolve(&self, a_level: bool) -> Detent {
-        if a_level != self.stable_b {
-            Detent::Clockwise
-        } else {
-            Detent::CounterClockwise
-        }
+    /// Net signed valid Gray transitions since construction.
+    pub fn position(&self) -> i32 {
+        self.position
     }
 
-    /// Feed one raw sample of both phases. Returns a detent once a debounced
-    /// phase A level change has its direction resolved.
+    /// Feed one raw sample. A debounced A transition emits one detent; its
+    /// direction comes from signed Gray movement accumulated across the
+    /// whole click interval rather than B at any selected instant.
     pub fn update(&mut self, a_high: bool, b_high: bool) -> Option<Detent> {
+        let state = encode(a_high, b_high);
+        let delta = TRANSITION_DELTA[usize::from((self.previous_state << 2) | state)];
+        self.previous_state = state;
+        self.interval_movement += i32::from(delta);
+        self.position += i32::from(delta);
+
         if a_high == self.candidate_a {
             self.run_a = self.run_a.saturating_add(1);
         } else {
             self.candidate_a = a_high;
             self.run_a = 1;
         }
-        if b_high == self.candidate_b {
-            self.run_b = self.run_b.saturating_add(1);
-        } else {
-            self.candidate_b = b_high;
-            self.run_b = 1;
-        }
-
-        // Promote B before anything else so a toggle settling in this very
-        // sample is visible to a direction decision made below.
-        if self.run_b >= DEBOUNCE_SAMPLES && self.candidate_b != self.stable_b {
-            self.stable_b = self.candidate_b;
-        }
 
         if self.run_a >= DEBOUNCE_SAMPLES && self.candidate_a != self.stable_a {
             self.stable_a = self.candidate_a;
-            // A new click before the previous one resolved (not reachable at
-            // human speeds): flush the old one with the best current guess.
-            let flushed = self.pending_a.take().map(|level| self.resolve(level));
-            self.pending_a = Some(self.stable_a);
-            self.resolve_countdown = DIRECTION_RESOLVE_SAMPLES;
-            return flushed;
-        }
-
-        if let Some(level) = self.pending_a {
-            self.resolve_countdown -= 1;
-            if self.resolve_countdown == 0 {
-                self.pending_a = None;
-                return Some(self.resolve(level));
+            let direction = if self.interval_movement > 0 {
+                Some(Detent::Clockwise)
+            } else if self.interval_movement < 0 {
+                Some(Detent::CounterClockwise)
+            } else {
+                self.last_direction
+            };
+            self.interval_movement = 0;
+            if let Some(direction) = direction {
+                self.last_direction = Some(direction);
             }
+            return direction;
         }
         None
     }
@@ -146,10 +121,9 @@ impl ClockedDetentDecoder {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClockedDetentDecoder, DEBOUNCE_SAMPLES, DIRECTION_RESOLVE_SAMPLES, Detent};
+    use super::{ClockedDetentDecoder, DEBOUNCE_SAMPLES, Detent};
 
     const STABLE: usize = DEBOUNCE_SAMPLES as usize;
-    const RESOLVED: usize = DIRECTION_RESOLVE_SAMPLES as usize + STABLE + 1;
 
     struct Harness {
         decoder: ClockedDetentDecoder,
@@ -272,12 +246,12 @@ mod tests {
     }
 
     #[test]
-    fn settled_double_transition_resolves_as_b_led() {
-        // Both phases flip in the same sample and stay: only the B-leading
-        // anatomy produces this, so it must count as one CCW click.
+    fn first_completely_ambiguous_double_has_no_invented_direction() {
+        // A two-bit transition has no direction information. With no prior
+        // direction to use as a fallback, the decoder must not invent one.
         let mut harness = Harness::new(true, true);
-        harness.hold(S00, RESOLVED + 200);
-        harness.assert_events(0, 1);
+        harness.hold(S00, STABLE + 200);
+        harness.assert_events(0, 0);
     }
 
     #[test]

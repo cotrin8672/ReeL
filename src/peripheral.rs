@@ -96,11 +96,11 @@ fn ble_addr() -> [u8; 6] {
 ///
 /// On this encoder (BM4.0A01 style, 9 pulse / 18 click) phase B switches at
 /// the detent rest positions and its edge is always consumed by the detent
-/// snap, so only phase A produces a readable edge per click (verified with
+/// snap, so only phase A produces a reliable edge per click (verified with
 /// the on-device diagnostics). `rotary_decoder::ClockedDetentDecoder`
-/// therefore uses A as the click clock and B's debounced level as the
-/// direction bit, resolved a few ms after the edge because B's toggle can
-/// ride just ahead of A's edge in one rotation direction; this task only
+/// therefore uses debounced A as the click clock and the sign of all raw
+/// valid Gray transitions accumulated over that click as its direction.
+/// It never samples B at a selected time relative to A; this task only
 /// supplies raw samples:
 ///
 /// - Idle: sleep until either phase produces an edge.
@@ -152,8 +152,6 @@ impl Runnable for LeftRotaryEncoder {
         // ~50 ms without any raw level change before returning to edge wakeup.
         const QUIET_SAMPLES_TO_IDLE: u32 = 820;
 
-        // Net emitted detents (CW - CCW), shown in the diagnostics area.
-        let mut net_detents: i32 = 0;
         let mut last_levels = (self.pin_a.is_high(), self.pin_b.is_high());
 
         loop {
@@ -189,19 +187,19 @@ impl Runnable for LeftRotaryEncoder {
                 if let Some(detent) = self.decoder.update(levels.0, levels.1) {
                     let direction = match detent {
                         Detent::Clockwise => {
-                            net_detents += 1;
                             ENCODER_DIAG.clockwise.fetch_add(1, Ordering::Relaxed);
                             Direction::Clockwise
                         }
                         Detent::CounterClockwise => {
-                            net_detents -= 1;
                             ENCODER_DIAG.counterclockwise.fetch_add(1, Ordering::Relaxed);
                             Direction::CounterClockwise
                         }
                     };
-                    ENCODER_DIAG.position.store(net_detents, Ordering::Relaxed);
                     ENCODER_DIRECTION_CHANNEL.send(direction).await;
                 }
+                ENCODER_DIAG
+                    .position
+                    .store(self.decoder.position(), Ordering::Relaxed);
 
                 if quiet_samples >= QUIET_SAMPLES_TO_IDLE {
                     break;
