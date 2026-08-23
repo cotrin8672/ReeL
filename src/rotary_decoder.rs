@@ -18,8 +18,12 @@
 //! - Every raw one-bit Gray transition contributes +1 or -1 to signed
 //!   movement. Bounce contributes opposite pairs and cancels.
 //! - When A confirms a click, the sign accumulated since the previous
-//!   confirmed A click gives its direction. No instantaneous B read and no
-//!   timing window is involved.
+//!   confirmed A click gives its direction.
+//! - Once the contacts have been unchanged for [`EVIDENCE_IDLE_SAMPLES`],
+//!   movement left over from the previous click settling is discarded. It
+//!   must not bias the first click after a direction reversal.
+//!
+//! No instantaneous B read or fixed B-sampling delay is involved.
 //!
 //! A sampled two-bit transition contains no direction information and adds
 //! zero. If an entire click is such a transition (not observed in the
@@ -42,6 +46,11 @@ pub enum Detent {
 /// At the ~61 us sample period this is about 1 ms.
 pub const DEBOUNCE_SAMPLES: u8 = 16;
 
+/// Unchanged samples before direction evidence is considered old. This is
+/// about 1 ms at the ~61 us sample period. A confirms at the same duration,
+/// so a real A edge is consumed before its evidence can expire.
+const EVIDENCE_IDLE_SAMPLES: u8 = DEBOUNCE_SAMPLES;
+
 /// +1 follows the datasheet CW sequence
 /// `11 -> 01 -> 00 -> 10 -> 11`; -1 follows the reverse sequence.
 const TRANSITION_DELTA: [i8; 16] = [
@@ -60,6 +69,7 @@ pub struct ClockedDetentDecoder {
     candidate_a: bool,
     run_a: u8,
     previous_state: u8,
+    unchanged_samples: u8,
     interval_movement: i32,
     position: i32,
     last_direction: Option<Detent>,
@@ -72,6 +82,7 @@ impl ClockedDetentDecoder {
             candidate_a: a_high,
             run_a: DEBOUNCE_SAMPLES,
             previous_state: encode(a_high, b_high),
+            unchanged_samples: EVIDENCE_IDLE_SAMPLES,
             interval_movement: 0,
             position: 0,
             last_direction: None,
@@ -88,6 +99,11 @@ impl ClockedDetentDecoder {
     /// whole click interval rather than B at any selected instant.
     pub fn update(&mut self, a_high: bool, b_high: bool) -> Option<Detent> {
         let state = encode(a_high, b_high);
+        if state == self.previous_state {
+            self.unchanged_samples = self.unchanged_samples.saturating_add(1);
+        } else {
+            self.unchanged_samples = 0;
+        }
         let delta = TRANSITION_DELTA[usize::from((self.previous_state << 2) | state)];
         self.previous_state = state;
         self.interval_movement += i32::from(delta);
@@ -114,6 +130,13 @@ impl ClockedDetentDecoder {
                 self.last_direction = Some(direction);
             }
             return direction;
+        }
+
+        // A completed click can leave a trailing B transition in the next
+        // interval. Once the contacts settle, that evidence belongs to the
+        // old click and must not survive into a later reversal.
+        if self.unchanged_samples >= EVIDENCE_IDLE_SAMPLES {
+            self.interval_movement = 0;
         }
         None
     }
@@ -276,6 +299,25 @@ mod tests {
         harness.assert_events(1, 0);
         ccw_click_from_00(&mut harness);
         harness.assert_events(0, 1);
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
+    }
+
+    #[test]
+    fn reversal_discards_settled_residue_from_the_previous_click() {
+        let mut harness = Harness::new(true, true);
+
+        cw_click_from_11(&mut harness);
+        harness.assert_events(1, 0);
+        // Reproduce the device symptom: uncancelled trailing B movement has
+        // the old CW sign. A quiet detent must expire it before reversal.
+        harness.decoder.interval_movement = 2;
+        harness.hold(S00, STABLE + 1);
+        ccw_click_from_00(&mut harness);
+        harness.assert_events(0, 1);
+
+        harness.decoder.interval_movement = -2;
+        harness.hold(S11, STABLE + 1);
         cw_click_from_11(&mut harness);
         harness.assert_events(1, 0);
     }
