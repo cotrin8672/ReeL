@@ -10,11 +10,12 @@ mod xiao_battery;
 use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
+use embassy_futures::select::select;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::mode::Async;
-use embassy_nrf::peripherals::{QDEC, RNG, SPI3, USBD};
+use embassy_nrf::peripherals::{RNG, SPI3, USBD};
 use embassy_nrf::saadc::Input as _;
-use embassy_nrf::{bind_interrupts, qdec, rng, saadc, spim, usb};
+use embassy_nrf::{bind_interrupts, rng, saadc, spim, usb};
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use nrf_mpsl::Flash;
@@ -37,7 +38,7 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
-use rotary_decoder::{DetentDirection, StableADirectionDecoder, UpdateResult};
+use rotary_decoder::{Detent, QuadratureAccumulator};
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -46,7 +47,6 @@ use xiao_battery::{
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
     RNG => rng::InterruptHandler<RNG>;
-    QDEC => qdec::InterruptHandler<QDEC>;
     EGU0_SWI0 => nrf_sdc::mpsl::LowPrioInterruptHandler;
     CLOCK_POWER => nrf_sdc::mpsl::ClockInterruptHandler, usb::vbus_detect::InterruptHandler;
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
@@ -90,33 +90,33 @@ fn ble_addr() -> [u8; 6] {
     unwrap!(addr.to_le_bytes()[..6].try_into())
 }
 
-/// Count clicks from stable P1_14 changes and obtain only their direction from
-/// QDEC's signed movement. Raw QDEC magnitude is deliberately never treated as
-/// a click count.
-struct LeftRotaryEncoder<'d> {
-    _qdec: qdec::Qdec<'d>,
-    decoder: StableADirectionDecoder,
+/// Rotary encoder reader for the left half.
+///
+/// The encoder (9 pulse / 18 click) switches phase B exactly at the detent
+/// rest positions, so B chatters at rest and no single instantaneous read of
+/// it is trustworthy. `rotary_decoder::QuadratureAccumulator` handles that by
+/// integrating every raw quadrature transition; this task only supplies raw
+/// samples:
+///
+/// - Idle: sleep until either phase produces an edge.
+/// - Active: sample both phases every ~250 us, feed them to the accumulator
+///   unfiltered, and forward emitted detents. After ~50 ms without any level
+///   change, return to edge wakeup.
+struct LeftRotaryEncoder {
+    pin_a: Input<'static>,
+    pin_b: Input<'static>,
+    decoder: QuadratureAccumulator,
 }
 
-impl<'d> LeftRotaryEncoder<'d> {
-    fn new(qdec: qdec::Qdec<'d>) -> Self {
-        let initial_a_high = embassy_nrf::pac::P1.in_().read().pin(14);
-        // Discard movement accumulated while the QDEC and task are being
-        // initialized. The current A level is the decoder's baseline.
-        let _ = read_and_clear_qdec();
+impl LeftRotaryEncoder {
+    fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
+        let decoder = QuadratureAccumulator::new(pin_a.is_high(), pin_b.is_high());
         Self {
-            _qdec: qdec,
-            decoder: StableADirectionDecoder::new(initial_a_high),
+            pin_a,
+            pin_b,
+            decoder,
         }
     }
-}
-
-const ENCODER_POLL_US: u64 = 100;
-
-fn read_and_clear_qdec() -> i16 {
-    let qdec = embassy_nrf::pac::QDEC;
-    qdec.tasks_rdclracc().write_value(1);
-    qdec.accread().read() as i16
 }
 
 const ENCODER_EVENT_QUEUE_SIZE: usize = 64;
@@ -128,29 +128,52 @@ async fn encoder_event_task() -> ! {
     loop {
         let direction = ENCODER_DIRECTION_CHANNEL.receive().await;
         publish_event_async(KeyboardEvent::rotary_encoder(0, direction, true)).await;
-        // Keep the tap visible to the split transport while edge capture keeps
+        // Keep the tap visible to the split transport while sampling keeps
         // running independently in LeftRotaryEncoder::run.
         Timer::after_millis(5).await;
         publish_event_async(KeyboardEvent::rotary_encoder(0, direction, false)).await;
     }
 }
 
-impl Runnable for LeftRotaryEncoder<'_> {
+impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
+        // Rounds up to the next 32.768 kHz timer tick (~274 us). Far shorter
+        // than the gap between the two phase edges of one click, so real
+        // transitions are never merged into an ambiguous double transition.
+        const SAMPLE_PERIOD_US: u64 = 250;
+        // ~50 ms without any raw level change before returning to edge wakeup.
+        const QUIET_SAMPLES_TO_IDLE: u32 = 200;
+
         loop {
-            Timer::after_micros(ENCODER_POLL_US).await;
-            let a_high = embassy_nrf::pac::P1.in_().read().pin(14);
-            match self.decoder.update(a_high, read_and_clear_qdec()) {
-                UpdateResult::Detent(detent) => {
+            // Idle: no polling while the knob rests quietly.
+            select(
+                self.pin_a.wait_for_any_edge(),
+                self.pin_b.wait_for_any_edge(),
+            )
+            .await;
+
+            let mut last_levels = (self.pin_a.is_high(), self.pin_b.is_high());
+            let mut quiet_samples = 0;
+            loop {
+                if let Some(detent) = self.decoder.update(last_levels.0, last_levels.1) {
                     let direction = match detent {
-                        DetentDirection::Positive => Direction::CounterClockwise,
-                        DetentDirection::Negative => Direction::Clockwise,
+                        Detent::Clockwise => Direction::Clockwise,
+                        Detent::CounterClockwise => Direction::CounterClockwise,
                     };
-                    // Capture stays independent of the 5 ms key-tap task until
-                    // the queue is genuinely full.
                     ENCODER_DIRECTION_CHANNEL.send(direction).await;
                 }
-                UpdateResult::Idle | UpdateResult::Settling | UpdateResult::Resynchronized => {}
+
+                if quiet_samples >= QUIET_SAMPLES_TO_IDLE {
+                    break;
+                }
+                Timer::after_micros(SAMPLE_PERIOD_US).await;
+                let levels = (self.pin_a.is_high(), self.pin_b.is_high());
+                if levels == last_levels {
+                    quiet_samples += 1;
+                } else {
+                    quiet_samples = 0;
+                    last_levels = levels;
+                }
             }
         }
     }
@@ -229,11 +252,9 @@ async fn main(spawner: Spawner) {
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 4, 6, true>::new(row_pins, col_pins, debouncer);
-    let mut encoder_qdec_config = qdec::Config::default();
-    encoder_qdec_config.period = qdec::SamplePeriod::_128us;
-    encoder_qdec_config.debounce = true;
-    let encoder_qdec = qdec::Qdec::new(p.QDEC, Irqs, p.P1_14, p.P1_15, encoder_qdec_config);
-    let mut encoder = LeftRotaryEncoder::new(encoder_qdec);
+    let encoder_a = Input::new(p.P1_14, Pull::Up);
+    let encoder_b = Input::new(p.P1_15, Pull::Up);
+    let mut encoder = LeftRotaryEncoder::new(encoder_a, encoder_b);
     spawner.spawn(encoder_event_task().unwrap());
     let mut watchdog = Nrf52Watchdog::default_runner(p.WDT);
 
