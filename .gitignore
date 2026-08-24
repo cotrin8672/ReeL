@@ -4,8 +4,9 @@
 *.kicad_*.lck
 fp-info-cache
 
-# RMK build output and converted firmware
+# Leftover local firmware build output from before the repository split
 /target/
+**/target/
 /*.hex
 /*.uf2
 
