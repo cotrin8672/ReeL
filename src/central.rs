@@ -96,6 +96,7 @@ const L2CAP_TXQ: u8 = 3;
 const L2CAP_RXQ: u8 = 3;
 const L2CAP_MTU: usize = 251;
 const TRACKBALL_DEVICE_ID: u8 = 0;
+const TRACKBALL_REPORT_HZ: u16 = 250;
 const AML_TRIGGER_DEVICE_ID: u8 = 1;
 const AML_TRIGGER_THRESHOLD: u16 = 3;
 const NRF52840_FLASH_SIZE: u32 = 1024 * 1024;
@@ -303,8 +304,11 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
     let pmw_sensor = Pmw3610::new(TRACKBALL_DEVICE_ID, pmw_spi, pmw_cs, pmw_motion, pmw_config);
-    let mut trackball =
-        TransformingPointingDevice::with_report_hz(TRACKBALL_DEVICE_ID, pmw_sensor, 125);
+    let mut trackball = TransformingPointingDevice::with_report_hz(
+        TRACKBALL_DEVICE_ID,
+        pmw_sensor,
+        TRACKBALL_REPORT_HZ,
+    );
     let mut smart_aml_trigger = SmartAutoMouseTrigger::new(
         TRACKBALL_DEVICE_ID,
         AML_TRIGGER_DEVICE_ID,

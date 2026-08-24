@@ -3,6 +3,7 @@
 
 #[macro_use]
 mod macros;
+mod rotary_decoder;
 mod sharp_lcd;
 mod xiao_battery;
 
@@ -36,6 +37,7 @@ use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, RawMutex};
 use static_cell::StaticCell;
 
+use rotary_decoder::{ClockedDetentDecoder, Detent};
 use sharp_lcd::new_status_lcd;
 use xiao_battery::{
     DIVIDER_MEASURED, DIVIDER_TOTAL, PeripheralBatterySnapshot, XiaoBatteryMonitor,
@@ -89,22 +91,22 @@ fn ble_addr() -> [u8; 6] {
 
 /// Rotary encoder reader for the left half.
 ///
-/// Read one event per mechanical detent from phase A.
-///
-/// The measured encoder changes phase A once per detent. Phase B is sampled
-/// immediately at the A edge and is used only to determine direction.
+/// Phase A is debounced as the one-edge-per-detent click clock. Direction
+/// comes from signed raw Gray-code movement captured around that A edge, so
+/// phase B is never sampled at a fragile fixed time relative to A.
 struct LeftRotaryEncoder {
     pin_a: Input<'static>,
     pin_b: Input<'static>,
-    last_a: bool,
+    decoder: ClockedDetentDecoder,
 }
 
 impl LeftRotaryEncoder {
     fn new(pin_a: Input<'static>, pin_b: Input<'static>) -> Self {
+        let decoder = ClockedDetentDecoder::new(pin_a.is_high(), pin_b.is_high());
         Self {
-            last_a: pin_a.is_high(),
             pin_a,
             pin_b,
+            decoder,
         }
     }
 }
@@ -127,32 +129,44 @@ async fn encoder_event_task() -> ! {
 
 impl Runnable for LeftRotaryEncoder {
     async fn run(&mut self) -> ! {
+        use rmk::embassy_futures::select::select;
+
+        // Two 32.768 kHz timer ticks (~61 us).
+        const SAMPLE_PERIOD_TICKS: u64 = 2;
+        // Return to edge-triggered sleep after ~50 ms without a level change.
+        const QUIET_SAMPLES_TO_IDLE: u32 = 820;
+
+        let mut last_levels = (self.pin_a.is_high(), self.pin_b.is_high());
+
         loop {
-            self.pin_a.wait_for_any_edge().await;
+            select(
+                self.pin_a.wait_for_any_edge(),
+                self.pin_b.wait_for_any_edge(),
+            )
+            .await;
 
-            let a = self.pin_a.is_high();
-            let b = self.pin_b.is_high();
+            let mut quiet_samples = 0;
+            loop {
+                let levels = (self.pin_a.is_high(), self.pin_b.is_high());
+                if levels == last_levels {
+                    quiet_samples += 1;
+                } else {
+                    quiet_samples = 0;
+                    last_levels = levels;
+                }
 
-            // Ignore an interrupt that did not result in an A state change.
-            if a == self.last_a {
-                continue;
-            }
+                if let Some(detent) = self.decoder.update(levels.0, levels.1) {
+                    let direction = match detent {
+                        Detent::Clockwise => Direction::Clockwise,
+                        Detent::CounterClockwise => Direction::CounterClockwise,
+                    };
+                    ENCODER_DIRECTION_CHANNEL.send(direction).await;
+                }
 
-            // Preserve the existing A/B polarity used by the old custom
-            // decoder: equal levels are counter-clockwise.
-            let direction = if a == b {
-                Direction::CounterClockwise
-            } else {
-                Direction::Clockwise
-            };
-
-            // Confirm that the A edge remained stable before publishing it.
-            Timer::after_millis(2).await;
-            let settled_a = self.pin_a.is_high();
-
-            if settled_a == a {
-                self.last_a = a;
-                ENCODER_DIRECTION_CHANNEL.send(direction).await;
+                if quiet_samples >= QUIET_SAMPLES_TO_IDLE {
+                    break;
+                }
+                Timer::after_ticks(SAMPLE_PERIOD_TICKS).await;
             }
         }
     }
